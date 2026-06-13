@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createMockServices } from '../mocks/gas-services.js';
-import { leerHorarioConfig, leerBloqueos } from '../src/horario.js';
+import { leerHorarioConfig, leerBloqueos, actualizarHorarioConfig } from '../src/horario.js';
 
 const HORARIO_HEADER = ['diaSemana', 'activo', 'horaInicio', 'horaFin', 'duracionSlotMin'];
 const BLOQUEOS_HEADER = ['id', 'fechaInicio', 'fechaFin', 'motivo', 'creadoPor', 'fechaCreacion'];
@@ -67,5 +67,51 @@ describe('leerBloqueos', () => {
   it('devuelve lista vacia si no hay bloqueos', () => {
     const services = buildServices();
     expect(leerBloqueos(services)).toEqual({ ok: true, bloqueos: [] });
+  });
+});
+
+describe('actualizarHorarioConfig', () => {
+  function horarioValido() {
+    return HORARIO_LABORAL.map(([diaSemana, activo, horaInicio, horaFin, duracionSlotMin]) => ({
+      diaSemana, activo, horaInicio, horaFin, duracionSlotMin,
+    }));
+  }
+
+  it('guarda las 7 filas y leerHorarioConfig las refleja', () => {
+    const services = buildServices({ horario: HORARIO_LABORAL });
+    const horario = horarioValido();
+    horario[0] = { ...horario[0], horaInicio: '10:00' };
+
+    expect(actualizarHorarioConfig({ horario }, services)).toEqual({ ok: true });
+    expect(leerHorarioConfig(services).horario[0]).toEqual({
+      diaSemana: 'Lunes', activo: true, horaInicio: '10:00', horaFin: '18:00', duracionSlotMin: 45,
+    });
+  });
+
+  it('rechaza si no se envian las 7 filas', () => {
+    const services = buildServices({ horario: HORARIO_LABORAL });
+    const horario = horarioValido().slice(0, 6);
+    expect(actualizarHorarioConfig({ horario }, services)).toEqual({ error: 'Se requieren las 7 filas de horario' });
+  });
+
+  it('rechaza si horaInicio >= horaFin en un dia activo', () => {
+    const services = buildServices({ horario: HORARIO_LABORAL });
+    const horario = horarioValido();
+    horario[0] = { ...horario[0], horaInicio: '18:00', horaFin: '09:00' };
+    expect(actualizarHorarioConfig({ horario }, services)).toEqual({ error: 'horaInicio debe ser menor que horaFin (Lunes)' });
+  });
+
+  it('rechaza si duracionSlotMin no es mayor que 0 en un dia activo', () => {
+    const services = buildServices({ horario: HORARIO_LABORAL });
+    const horario = horarioValido();
+    horario[1] = { ...horario[1], duracionSlotMin: 0 };
+    expect(actualizarHorarioConfig({ horario }, services)).toEqual({ error: 'duracionSlotMin debe ser mayor que 0 (Martes)' });
+  });
+
+  it('no valida horas ni duracion de un dia inactivo', () => {
+    const services = buildServices({ horario: HORARIO_LABORAL });
+    const horario = horarioValido();
+    horario[5] = { ...horario[5], horaInicio: '18:00', horaFin: '09:00', duracionSlotMin: 0 };
+    expect(actualizarHorarioConfig({ horario }, services)).toEqual({ ok: true });
   });
 });
