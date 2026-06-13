@@ -69,6 +69,64 @@ describe('login', () => {
   });
 });
 
+describe('login - limite de intentos', () => {
+  it('bloquea el login tras 5 intentos fallidos consecutivos', () => {
+    const services = buildServicesWithUser({ codigo: 'ADM001', password: 'secreta123', rol: 'administrador', nombre: 'Admin' });
+
+    for (let i = 0; i < 5; i++) {
+      expect(login('ADM001', 'incorrecta', services)).toEqual({ error: 'Usuario o contraseña incorrectos' });
+    }
+
+    const result = login('ADM001', 'secreta123', services);
+    expect(result).toEqual({ error: 'Demasiados intentos fallidos. Intente nuevamente en 15 minutos.' });
+  });
+
+  it('registra login_bloqueado en _log cuando se excede el limite', () => {
+    const services = buildServicesWithUser({ codigo: 'ADM001', password: 'secreta123', rol: 'administrador', nombre: 'Admin' });
+
+    for (let i = 0; i < 5; i++) {
+      login('ADM001', 'incorrecta', services);
+    }
+    login('ADM001', 'secreta123', services);
+
+    const logRows = services.SpreadsheetApp._sheets['_log'];
+    const lastRow = logRows[logRows.length - 1];
+    expect(lastRow[3]).toBe('login_bloqueado');
+  });
+
+  it('un login exitoso reinicia el contador de intentos fallidos', () => {
+    const services = buildServicesWithUser({ codigo: 'ADM001', password: 'secreta123', rol: 'administrador', nombre: 'Admin' });
+
+    for (let i = 0; i < 4; i++) {
+      login('ADM001', 'incorrecta', services);
+    }
+    login('ADM001', 'secreta123', services);
+
+    for (let i = 0; i < 4; i++) {
+      expect(login('ADM001', 'incorrecta', services)).toEqual({ error: 'Usuario o contraseña incorrectos' });
+    }
+  });
+
+  it('el bloqueo se libera despues de 15 minutos', () => {
+    const services = buildServicesWithUser({ codigo: 'ADM001', password: 'secreta123', rol: 'administrador', nombre: 'Admin' });
+
+    vi.useFakeTimers();
+    try {
+      for (let i = 0; i < 5; i++) {
+        login('ADM001', 'incorrecta', services);
+      }
+      expect(login('ADM001', 'secreta123', services).error).toBeDefined();
+
+      vi.advanceTimersByTime(15 * 60 * 1000 + 1000);
+
+      const result = login('ADM001', 'secreta123', services);
+      expect(result.ok).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe('verifyToken', () => {
   it('devuelve el usuario para un token valido', () => {
     const services = buildServicesWithUser({ codigo: 'ADM001', password: 'secreta123', rol: 'administrador', nombre: 'Admin' });
