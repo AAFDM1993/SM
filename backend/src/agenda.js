@@ -1,0 +1,125 @@
+import { leerHorarioConfig, leerBloqueos } from './horario.js';
+import { findUser } from './usuarios.js';
+
+const SHEET_CITAS = '_citas';
+const DIAS_SEMANA = ['Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado', 'Domingo'];
+
+function diaSemanaDeFecha(fecha) {
+  const date = new Date(`${fecha}T00:00:00`);
+  const indice = (date.getDay() + 6) % 7; // 0=lunes .. 6=domingo
+  return DIAS_SEMANA[indice];
+}
+
+function rangoFechas(fechaInicio, fechaFin) {
+  const fechas = [];
+  let actual = new Date(`${fechaInicio}T00:00:00`);
+  const fin = new Date(`${fechaFin}T00:00:00`);
+  while (actual <= fin) {
+    fechas.push(formatearFecha(actual));
+    actual = new Date(actual.getTime() + 24 * 60 * 60 * 1000);
+  }
+  return fechas;
+}
+
+function formatearFecha(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function horaAMinutos(hora) {
+  const [h, m] = hora.split(':').map(Number);
+  return h * 60 + m;
+}
+
+function minutosAHora(minutos) {
+  const h = Math.floor(minutos / 60);
+  const m = minutos % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function generarSlots(horaInicio, horaFin, duracionSlotMin) {
+  const slots = [];
+  let actual = horaAMinutos(horaInicio);
+  const fin = horaAMinutos(horaFin);
+  while (actual + duracionSlotMin <= fin) {
+    slots.push({ horaInicio: minutosAHora(actual), horaFin: minutosAHora(actual + duracionSlotMin) });
+    actual += duracionSlotMin;
+  }
+  return slots;
+}
+
+function leerCitasRaw(services) {
+  const sheet = services.SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_CITAS);
+  if (!sheet) return [];
+  const last = sheet.getLastRow();
+  if (last < 2) return [];
+  return sheet.getRange(2, 1, last - 1, 9).getValues()
+    .filter((r) => String(r[0]).trim() !== '')
+    .map((r, i) => ({
+      id: String(r[0]),
+      fecha: String(r[1]),
+      horaInicio: String(r[2]),
+      horaFin: String(r[3]),
+      pacienteCodigo: String(r[4]),
+      estado: String(r[5]),
+      creadoPor: String(r[6]),
+      fechaCreacion: r[7],
+      fechaActualizacion: r[8],
+      _fila: i + 2,
+    }));
+}
+
+function nombrePaciente(codigo, services) {
+  const user = findUser(codigo, services);
+  return user ? user.nombre : codigo;
+}
+
+export function leerAgenda(fechaInicio, fechaFin, services) {
+  if (!fechaInicio || !fechaFin) {
+    return { error: 'fechaInicio y fechaFin son requeridos' };
+  }
+
+  const horarioConfig = leerHorarioConfig(services).horario;
+  const bloqueos = leerBloqueos(services).bloqueos
+    .filter((bq) => bq.fechaInicio <= fechaFin && bq.fechaFin >= fechaInicio);
+  const citas = leerCitasRaw(services).filter((c) => c.fecha >= fechaInicio && c.fecha <= fechaFin);
+
+  const slots = [];
+
+  for (const fecha of rangoFechas(fechaInicio, fechaFin)) {
+    const diaSemana = diaSemanaDeFecha(fecha);
+    const config = horarioConfig.find((c) => c.diaSemana === diaSemana);
+    if (!config || !config.activo) continue;
+
+    const estaBloqueada = bloqueos.some((bq) => bq.fechaInicio <= fecha && fecha <= bq.fechaFin);
+
+    for (const slot of generarSlots(config.horaInicio, config.horaFin, config.duracionSlotMin)) {
+      const cita = citas.find((c) => c.fecha === fecha && c.horaInicio === slot.horaInicio && c.estado !== 'Cancelada');
+      if (cita) {
+        slots.push({
+          fecha, horaInicio: slot.horaInicio, horaFin: slot.horaFin,
+          estado: 'ocupado', citaId: cita.id, pacienteNombre: nombrePaciente(cita.pacienteCodigo, services), estadoCita: cita.estado,
+        });
+      } else if (estaBloqueada) {
+        slots.push({ fecha, horaInicio: slot.horaInicio, horaFin: slot.horaFin, estado: 'bloqueado' });
+      } else {
+        slots.push({ fecha, horaInicio: slot.horaInicio, horaFin: slot.horaFin, estado: 'disponible' });
+      }
+    }
+  }
+
+  for (const cita of citas) {
+    if (cita.estado === 'Cancelada') continue;
+    const yaIncluida = slots.some((s) => s.fecha === cita.fecha && s.horaInicio === cita.horaInicio && s.citaId === cita.id);
+    if (!yaIncluida) {
+      slots.push({
+        fecha: cita.fecha, horaInicio: cita.horaInicio, horaFin: cita.horaFin,
+        estado: 'ocupado', citaId: cita.id, pacienteNombre: nombrePaciente(cita.pacienteCodigo, services), estadoCita: cita.estado,
+      });
+    }
+  }
+
+  return { ok: true, horarioConfig, bloqueos, slots };
+}
