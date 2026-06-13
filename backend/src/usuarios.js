@@ -93,3 +93,15 @@ export function eliminarUsuario(codigo, services) {
   }
   return { error: 'No encontrado' };
 }
+
+export function listarPacientes(services) {
+  const sheet = services.SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_USUARIOS);
+  if (!sheet) return { ok: true, pacientes: [] };
+  const last = sheet.getLastRow();
+  if (last < 2) return { ok: true, pacientes: [] };
+  const rows = sheet.getRange(2, 1, last - 1, 5).getValues();
+  const pacientes = rows
+    .filter((r) => String(r[0]).trim() !== '' && String(r[3]).trim().toLowerCase() === 'usuario')
+    .map((r) => ({ codigo: String(r[0]).trim(), nombre: String(r[4]) }));
+  return { ok: true, pacientes };
+}

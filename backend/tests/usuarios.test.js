@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createMockServices } from '../mocks/gas-services.js';
 import { generarHashSHA256 } from '../src/hash.js';
-import { findUser, listarUsuarios, guardarUsuario, eliminarUsuario } from '../src/usuarios.js';
+import { findUser, listarUsuarios, guardarUsuario, eliminarUsuario, listarPacientes } from '../src/usuarios.js';
 
 const HEADER = ['codigo', 'password', 'salt', 'rol', 'nombre'];
 
@@ -108,5 +108,29 @@ describe('eliminarUsuario', () => {
   it('devuelve error si el usuario no existe', () => {
     const services = buildServices([['ABC123', 'hash1', 'salt1', 'administrador', 'Ana']]);
     expect(eliminarUsuario('zzz999', services)).toEqual({ error: 'No encontrado' });
+  });
+});
+
+describe('listarPacientes', () => {
+  it('lista solo codigo y nombre de usuarios con rol usuario', () => {
+    const services = buildServices([
+      ['ABC123', 'hash1', 'salt1', 'administrador', 'Ana'],
+      ['XYZ987', 'hash2', 'salt2', 'usuario', 'Beto'],
+      ['DEF456', 'hash3', 'salt3', 'usuario', 'Carla'],
+    ]);
+    expect(listarPacientes(services)).toEqual({
+      ok: true,
+      pacientes: [
+        { codigo: 'XYZ987', nombre: 'Beto' },
+        { codigo: 'DEF456', nombre: 'Carla' },
+      ],
+    });
+  });
+
+  it('devuelve lista vacia si no hay pacientes', () => {
+    const services = buildServices([
+      ['ABC123', 'hash1', 'salt1', 'administrador', 'Ana'],
+    ]);
+    expect(listarPacientes(services)).toEqual({ ok: true, pacientes: [] });
   });
 });
