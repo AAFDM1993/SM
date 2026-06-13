@@ -123,3 +123,42 @@ export function leerAgenda(fechaInicio, fechaFin, services) {
 
   return { ok: true, horarioConfig, bloqueos, slots };
 }
+
+export function crearCita(b, user, services) {
+  const fecha = String(b.fecha || '');
+  const horaInicio = String(b.horaInicio || '');
+  const pacienteCodigo = String(b.pacienteCodigo || '');
+
+  const horarioConfig = leerHorarioConfig(services).horario;
+  const config = horarioConfig.find((c) => c.diaSemana === diaSemanaDeFecha(fecha));
+  const slotValido = config && config.activo &&
+    generarSlots(config.horaInicio, config.horaFin, config.duracionSlotMin).some((s) => s.horaInicio === horaInicio);
+  if (!slotValido) {
+    return { error: 'fecha y horaInicio fuera del horario configurado' };
+  }
+
+  const bloqueos = leerBloqueos(services).bloqueos;
+  const estaBloqueada = bloqueos.some((bq) => bq.fechaInicio <= fecha && fecha <= bq.fechaFin);
+  const citas = leerCitasRaw(services);
+  const ocupado = citas.some((c) => c.fecha === fecha && c.horaInicio === horaInicio && c.estado !== 'Cancelada');
+  if (estaBloqueada || ocupado) {
+    return { error: 'Slot no disponible' };
+  }
+
+  const paciente = findUser(pacienteCodigo, services);
+  if (!paciente || paciente.rol !== 'usuario') {
+    return { error: 'Paciente no encontrado' };
+  }
+
+  const horaFin = minutosAHora(horaAMinutos(horaInicio) + config.duracionSlotMin);
+  const id = services.Utilities.getUuid();
+  const ahora = new Date();
+
+  const sheet = services.SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_CITAS);
+  sheet.appendRow([id, fecha, horaInicio, horaFin, pacienteCodigo, 'Programada', user.codigo, ahora, ahora]);
+
+  return {
+    ok: true,
+    cita: { id, fecha, horaInicio, horaFin, pacienteCodigo, pacienteNombre: paciente.nombre, estado: 'Programada' },
+  };
+}

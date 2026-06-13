@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createMockServices } from '../mocks/gas-services.js';
-import { leerAgenda } from '../src/agenda.js';
+import { leerAgenda, crearCita } from '../src/agenda.js';
 
 const HORARIO_HEADER = ['diaSemana', 'activo', 'horaInicio', 'horaFin', 'duracionSlotMin'];
 const BLOQUEOS_HEADER = ['id', 'fechaInicio', 'fechaFin', 'motivo', 'creadoPor', 'fechaCreacion'];
@@ -16,6 +16,8 @@ const HORARIO_LABORAL = [
   ['Sabado', false, '09:00', '13:00', 45],
   ['Domingo', false, '09:00', '13:00', 45],
 ];
+
+const USER_RECEPCION = { codigo: 'REC001', rol: 'recepcion' };
 
 function buildServices({ horario = HORARIO_LABORAL, bloqueos = [], citas = [], usuarios = [] } = {}) {
   return createMockServices({
@@ -114,5 +116,77 @@ describe('leerAgenda', () => {
     });
     const result = leerAgenda('2026-06-15', '2026-06-19', services);
     expect(result.bloqueos).toEqual([]);
+  });
+});
+
+describe('crearCita', () => {
+  it('crea una cita en un slot disponible', () => {
+    const services = buildServices({
+      usuarios: [['PAC001', 'h', 's', 'usuario', 'M. Garcia']],
+    });
+    const result = crearCita({ fecha: '2026-06-15', horaInicio: '09:00', pacienteCodigo: 'PAC001' }, USER_RECEPCION, services);
+    expect(result.ok).toBe(true);
+    expect(result.cita).toEqual({
+      id: result.cita.id, fecha: '2026-06-15', horaInicio: '09:00', horaFin: '09:45',
+      pacienteCodigo: 'PAC001', pacienteNombre: 'M. Garcia', estado: 'Programada',
+    });
+    expect(typeof result.cita.id).toBe('string');
+
+    const agenda = leerAgenda('2026-06-15', '2026-06-15', services);
+    expect(agenda.slots[0].estado).toBe('ocupado');
+    expect(agenda.slots[0].citaId).toBe(result.cita.id);
+  });
+
+  it('rechaza un dia inactivo (fuera de horario configurado)', () => {
+    const services = buildServices({ usuarios: [['PAC001', 'h', 's', 'usuario', 'M. Garcia']] });
+    const result = crearCita({ fecha: '2026-06-20', horaInicio: '09:00', pacienteCodigo: 'PAC001' }, USER_RECEPCION, services);
+    expect(result).toEqual({ error: 'fecha y horaInicio fuera del horario configurado' });
+  });
+
+  it('rechaza una hora que no coincide con ningun slot generado', () => {
+    const services = buildServices({ usuarios: [['PAC001', 'h', 's', 'usuario', 'M. Garcia']] });
+    const result = crearCita({ fecha: '2026-06-15', horaInicio: '09:10', pacienteCodigo: 'PAC001' }, USER_RECEPCION, services);
+    expect(result).toEqual({ error: 'fecha y horaInicio fuera del horario configurado' });
+  });
+
+  it('rechaza un slot ya ocupado por otra cita Programada', () => {
+    const services = buildServices({
+      citas: [['c1', '2026-06-15', '09:00', '09:45', 'PAC001', 'Programada', 'ADM001', new Date(), new Date()]],
+      usuarios: [['PAC001', 'h', 's', 'usuario', 'M. Garcia'], ['PAC002', 'h', 's', 'usuario', 'J. Lopez']],
+    });
+    const result = crearCita({ fecha: '2026-06-15', horaInicio: '09:00', pacienteCodigo: 'PAC002' }, USER_RECEPCION, services);
+    expect(result).toEqual({ error: 'Slot no disponible' });
+  });
+
+  it('rechaza un slot dentro de un bloqueo', () => {
+    const services = buildServices({
+      bloqueos: [['b1', '2026-06-15', '2026-06-15', 'Feriado', 'ADM001', new Date()]],
+      usuarios: [['PAC001', 'h', 's', 'usuario', 'M. Garcia']],
+    });
+    const result = crearCita({ fecha: '2026-06-15', horaInicio: '09:00', pacienteCodigo: 'PAC001' }, USER_RECEPCION, services);
+    expect(result).toEqual({ error: 'Slot no disponible' });
+  });
+
+  it('rechaza si el paciente no existe', () => {
+    const services = buildServices({});
+    const result = crearCita({ fecha: '2026-06-15', horaInicio: '09:00', pacienteCodigo: 'NOEXISTE' }, USER_RECEPCION, services);
+    expect(result).toEqual({ error: 'Paciente no encontrado' });
+  });
+
+  it('rechaza si el codigo corresponde a un usuario que no es paciente', () => {
+    const services = buildServices({
+      usuarios: [['ADM002', 'h', 's', 'administrador', 'Otro Admin']],
+    });
+    const result = crearCita({ fecha: '2026-06-15', horaInicio: '09:00', pacienteCodigo: 'ADM002' }, USER_RECEPCION, services);
+    expect(result).toEqual({ error: 'Paciente no encontrado' });
+  });
+
+  it('permite reservar un slot cuya cita previa fue Cancelada', () => {
+    const services = buildServices({
+      citas: [['c1', '2026-06-15', '09:00', '09:45', 'PAC001', 'Cancelada', 'ADM001', new Date(), new Date()]],
+      usuarios: [['PAC001', 'h', 's', 'usuario', 'M. Garcia'], ['PAC002', 'h', 's', 'usuario', 'J. Lopez']],
+    });
+    const result = crearCita({ fecha: '2026-06-15', horaInicio: '09:00', pacienteCodigo: 'PAC002' }, USER_RECEPCION, services);
+    expect(result.ok).toBe(true);
   });
 });
