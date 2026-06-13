@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { createMockServices } from '../mocks/gas-services.js';
-import { leerHorarioConfig, leerBloqueos, actualizarHorarioConfig } from '../src/horario.js';
+import { leerHorarioConfig, leerBloqueos, actualizarHorarioConfig, crearBloqueo, eliminarBloqueo } from '../src/horario.js';
 
 const HORARIO_HEADER = ['diaSemana', 'activo', 'horaInicio', 'horaFin', 'duracionSlotMin'];
 const BLOQUEOS_HEADER = ['id', 'fechaInicio', 'fechaFin', 'motivo', 'creadoPor', 'fechaCreacion'];
+const CITAS_HEADER = ['id', 'fecha', 'horaInicio', 'horaFin', 'pacienteCodigo', 'estado', 'creadoPor', 'fechaCreacion', 'fechaActualizacion'];
+const USUARIOS_HEADER = ['codigo', 'password', 'salt', 'rol', 'nombre'];
 
 const HORARIO_LABORAL = [
   ['Lunes', true, '09:00', '18:00', 45],
@@ -15,11 +17,13 @@ const HORARIO_LABORAL = [
   ['Domingo', false, '09:00', '13:00', 45],
 ];
 
-function buildServices({ horario = [], bloqueos = [] } = {}) {
+function buildServices({ horario = [], bloqueos = [], citas = [], usuarios = [] } = {}) {
   return createMockServices({
     sheets: {
       _horario_config: [HORARIO_HEADER, ...horario],
       _bloqueos: [BLOQUEOS_HEADER, ...bloqueos],
+      _citas: [CITAS_HEADER, ...citas],
+      _usuarios: [USUARIOS_HEADER, ...usuarios],
     },
   });
 }
@@ -113,5 +117,72 @@ describe('actualizarHorarioConfig', () => {
     const horario = horarioValido();
     horario[5] = { ...horario[5], horaInicio: '18:00', horaFin: '09:00', duracionSlotMin: 0 };
     expect(actualizarHorarioConfig({ horario }, services)).toEqual({ ok: true });
+  });
+});
+
+const ADMIN = { codigo: 'ADM001', rol: 'administrador' };
+
+describe('crearBloqueo', () => {
+  it('crea un bloqueo cuando no hay citas afectadas', () => {
+    const services = buildServices({});
+    const result = crearBloqueo({ fechaInicio: '2026-07-01', fechaFin: '2026-07-15', motivo: 'Vacaciones' }, ADMIN, services);
+    expect(result.ok).toBe(true);
+    expect(result.bloqueo).toMatchObject({ fechaInicio: '2026-07-01', fechaFin: '2026-07-15', motivo: 'Vacaciones' });
+    expect(typeof result.bloqueo.id).toBe('string');
+    expect(leerBloqueos(services).bloqueos).toHaveLength(1);
+  });
+
+  it('rechaza si fechaInicio es posterior a fechaFin', () => {
+    const services = buildServices({});
+    const result = crearBloqueo({ fechaInicio: '2026-07-15', fechaFin: '2026-07-01', motivo: '' }, ADMIN, services);
+    expect(result).toEqual({ error: 'fechaInicio debe ser anterior o igual a fechaFin' });
+  });
+
+  it('pide confirmacion si hay citas Programada en el rango', () => {
+    const services = buildServices({
+      citas: [['c1', '2026-07-05', '09:00', '09:45', 'PAC001', 'Programada', 'ADM001', new Date(), new Date()]],
+      usuarios: [['PAC001', 'h', 's', 'usuario', 'M. Garcia']],
+    });
+    const result = crearBloqueo({ fechaInicio: '2026-07-01', fechaFin: '2026-07-15', motivo: 'Vacaciones' }, ADMIN, services);
+    expect(result).toEqual({
+      ok: false,
+      requiereConfirmacion: true,
+      citasAfectadas: [{ id: 'c1', fecha: '2026-07-05', horaInicio: '09:00', pacienteNombre: 'M. Garcia' }],
+    });
+    expect(leerBloqueos(services).bloqueos).toHaveLength(0);
+  });
+
+  it('crea el bloqueo si confirmar:true aunque haya citas afectadas', () => {
+    const services = buildServices({
+      citas: [['c1', '2026-07-05', '09:00', '09:45', 'PAC001', 'Programada', 'ADM001', new Date(), new Date()]],
+      usuarios: [['PAC001', 'h', 's', 'usuario', 'M. Garcia']],
+    });
+    const result = crearBloqueo({ fechaInicio: '2026-07-01', fechaFin: '2026-07-15', motivo: 'Vacaciones', confirmar: true }, ADMIN, services);
+    expect(result.ok).toBe(true);
+    expect(leerBloqueos(services).bloqueos).toHaveLength(1);
+  });
+
+  it('ignora citas Canceladas al calcular citasAfectadas', () => {
+    const services = buildServices({
+      citas: [['c1', '2026-07-05', '09:00', '09:45', 'PAC001', 'Cancelada', 'ADM001', new Date(), new Date()]],
+      usuarios: [['PAC001', 'h', 's', 'usuario', 'M. Garcia']],
+    });
+    const result = crearBloqueo({ fechaInicio: '2026-07-01', fechaFin: '2026-07-15', motivo: 'Vacaciones' }, ADMIN, services);
+    expect(result.ok).toBe(true);
+  });
+});
+
+describe('eliminarBloqueo', () => {
+  it('elimina un bloqueo existente', () => {
+    const services = buildServices({
+      bloqueos: [['b1', '2026-07-01', '2026-07-15', 'Vacaciones', 'ADM001', new Date()]],
+    });
+    expect(eliminarBloqueo({ bloqueoId: 'b1' }, services)).toEqual({ ok: true });
+    expect(leerBloqueos(services).bloqueos).toHaveLength(0);
+  });
+
+  it('devuelve error si el bloqueo no existe', () => {
+    const services = buildServices({});
+    expect(eliminarBloqueo({ bloqueoId: 'inexistente' }, services)).toEqual({ error: 'Bloqueo no encontrado' });
   });
 });

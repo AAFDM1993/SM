@@ -1,5 +1,8 @@
+import { findUser } from './usuarios.js';
+
 const SHEET_HORARIO_CONFIG = '_horario_config';
 const SHEET_BLOQUEOS = '_bloqueos';
+const SHEET_CITAS = '_citas';
 
 export function leerHorarioConfig(services) {
   const sheet = services.SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_HORARIO_CONFIG);
@@ -65,4 +68,60 @@ export function actualizarHorarioConfig(b, services) {
   ]);
   sheet.getRange(2, 1, 7, 5).setValues(values);
   return { ok: true };
+}
+
+function leerCitasProgramadas(services) {
+  const sheet = services.SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_CITAS);
+  if (!sheet) return [];
+  const last = sheet.getLastRow();
+  if (last < 2) return [];
+  return sheet.getRange(2, 1, last - 1, 6).getValues()
+    .filter((r) => String(r[0]).trim() !== '' && String(r[5]) === 'Programada')
+    .map((r) => ({ id: String(r[0]), fecha: String(r[1]), horaInicio: String(r[2]), pacienteCodigo: String(r[4]) }));
+}
+
+function nombrePaciente(codigo, services) {
+  const user = findUser(codigo, services);
+  return user ? user.nombre : codigo;
+}
+
+export function crearBloqueo(b, user, services) {
+  const fechaInicio = String(b.fechaInicio || '');
+  const fechaFin = String(b.fechaFin || '');
+  const motivo = String(b.motivo || '');
+
+  if (!(fechaInicio <= fechaFin)) {
+    return { error: 'fechaInicio debe ser anterior o igual a fechaFin' };
+  }
+
+  if (!b.confirmar) {
+    const citasAfectadas = leerCitasProgramadas(services)
+      .filter((c) => c.fecha >= fechaInicio && c.fecha <= fechaFin)
+      .map((c) => ({ id: c.id, fecha: c.fecha, horaInicio: c.horaInicio, pacienteNombre: nombrePaciente(c.pacienteCodigo, services) }));
+    if (citasAfectadas.length > 0) {
+      return { ok: false, requiereConfirmacion: true, citasAfectadas };
+    }
+  }
+
+  const id = services.Utilities.getUuid();
+  const sheet = services.SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_BLOQUEOS);
+  sheet.appendRow([id, fechaInicio, fechaFin, motivo, user.codigo, new Date()]);
+
+  return { ok: true, bloqueo: { id, fechaInicio, fechaFin, motivo } };
+}
+
+export function eliminarBloqueo(b, services) {
+  const bloqueoId = String(b.bloqueoId || '');
+  const sheet = services.SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_BLOQUEOS);
+  if (!sheet) return { error: 'Bloqueo no encontrado' };
+  const last = sheet.getLastRow();
+  if (last < 2) return { error: 'Bloqueo no encontrado' };
+  const ids = sheet.getRange(2, 1, last - 1, 1).getValues();
+  for (let i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]) === bloqueoId) {
+      sheet.deleteRow(i + 2);
+      return { ok: true };
+    }
+  }
+  return { error: 'Bloqueo no encontrado' };
 }
