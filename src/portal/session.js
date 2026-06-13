@@ -1,8 +1,14 @@
 const KEY = 'smpdjm_session';
+const AUTH_ERROR_TYPES = ['No autorizado', 'Permiso denegado'];
 
 export function getSession() {
   const raw = localStorage.getItem(KEY);
-  return raw ? JSON.parse(raw) : null;
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
 }
 
 export function setSession(data) {
@@ -19,7 +25,7 @@ export function isAuthenticated() {
 
 // true si la respuesta de la API indica sesion invalida/expirada
 export function isAuthError(response) {
-  return response?.error === 'No autorizado' || response?.error === 'Permiso denegado';
+  return AUTH_ERROR_TYPES.includes(response?.error);
 }
 
 // limpia la sesion y redirige al login si la respuesta indica error de autorizacion
