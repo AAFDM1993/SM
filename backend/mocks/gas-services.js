@@ -147,6 +147,46 @@ export function createMockContentService() {
   };
 }
 
+export function createMockCalendarApp() {
+  const calendars = new Map();
+  let nextCalendarId = 1;
+  let nextEventId = 1;
+
+  function buildCalendar(id, name) {
+    const events = new Map();
+    return {
+      getId: () => id,
+      getName: () => name,
+      createEvent(title, start, end, options) {
+        const eventId = `event-${nextEventId++}`;
+        const event = {
+          getId: () => eventId,
+          getTitle: () => title,
+          deleteEvent: () => events.delete(eventId),
+        };
+        events.set(eventId, event);
+        return event;
+      },
+      getEventById: (eventId) => events.get(eventId) || null,
+    };
+  }
+
+  return {
+    getCalendarsByName(name) {
+      return [...calendars.values()].filter((cal) => cal.getName() === name);
+    },
+    createCalendar(name) {
+      const id = `calendar-${nextCalendarId++}`;
+      const calendar = buildCalendar(id, name);
+      calendars.set(id, calendar);
+      return calendar;
+    },
+    getCalendarById(id) {
+      return calendars.get(id) || null;
+    },
+  };
+}
+
 export function createMockServices(initialData = {}) {
   return {
     Utilities: createMockUtilities(),
@@ -154,5 +194,6 @@ export function createMockServices(initialData = {}) {
     CacheService: createMockCacheService(),
     PropertiesService: createMockPropertiesService(initialData.properties || {}),
     ContentService: createMockContentService(),
+    CalendarApp: createMockCalendarApp(),
   };
 }
