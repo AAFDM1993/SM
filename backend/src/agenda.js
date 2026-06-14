@@ -1,5 +1,7 @@
 import { leerHorarioConfig, leerBloqueos } from './horario.js';
 import { findUser } from './usuarios.js';
+import { crearEventoCita, eliminarEventoCita } from './calendario.js';
+import { registrarLog } from './log.js';
 
 const SHEET_CITAS = '_citas';
 const DIAS_SEMANA = ['Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado', 'Domingo'];
@@ -56,7 +58,7 @@ function leerCitasRaw(services) {
   if (!sheet) return [];
   const last = sheet.getLastRow();
   if (last < 2) return [];
-  return sheet.getRange(2, 1, last - 1, 9).getValues()
+  return sheet.getRange(2, 1, last - 1, 10).getValues()
     .filter((r) => String(r[0]).trim() !== '')
     .map((r, i) => ({
       id: String(r[0]),
@@ -68,6 +70,7 @@ function leerCitasRaw(services) {
       creadoPor: String(r[6]),
       fechaCreacion: r[7],
       fechaActualizacion: r[8],
+      calendarEventId: String(r[9] || ''),
       _fila: i + 2,
     }));
 }
@@ -155,8 +158,18 @@ export function crearCita(b, user, services) {
   const id = services.Utilities.getUuid();
   const ahora = new Date();
 
+  let calendarEventId = '';
+  try {
+    calendarEventId = crearEventoCita(
+      { fecha, horaInicio, horaFin, pacienteNombre: paciente.nombre },
+      services,
+    );
+  } catch (e) {
+    registrarLog(services, user.codigo, user.rol, 'calendario_error', `crearCita ${id}: ${e.message}`);
+  }
+
   const sheet = services.SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_CITAS);
-  sheet.appendRow([id, fecha, horaInicio, horaFin, pacienteCodigo, 'Programada', user.codigo, ahora, ahora]);
+  sheet.appendRow([id, fecha, horaInicio, horaFin, pacienteCodigo, 'Programada', user.codigo, ahora, ahora, calendarEventId]);
 
   return {
     ok: true,

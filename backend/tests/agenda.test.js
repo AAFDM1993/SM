@@ -4,8 +4,9 @@ import { leerAgenda, crearCita, cambiarEstadoCita, leerMiAgenda, cancelarMiCita 
 
 const HORARIO_HEADER = ['diaSemana', 'activo', 'horaInicio', 'horaFin', 'duracionSlotMin'];
 const BLOQUEOS_HEADER = ['id', 'fechaInicio', 'fechaFin', 'motivo', 'creadoPor', 'fechaCreacion'];
-const CITAS_HEADER = ['id', 'fecha', 'horaInicio', 'horaFin', 'pacienteCodigo', 'estado', 'creadoPor', 'fechaCreacion', 'fechaActualizacion'];
+const CITAS_HEADER = ['id', 'fecha', 'horaInicio', 'horaFin', 'pacienteCodigo', 'estado', 'creadoPor', 'fechaCreacion', 'fechaActualizacion', 'calendarEventId'];
 const USUARIOS_HEADER = ['codigo', 'password', 'salt', 'rol', 'nombre'];
+const LOG_HEADER = ['timestamp', 'codigo', 'rol', 'accion', 'detalle'];
 
 const HORARIO_LABORAL = [
   ['Lunes', true, '09:00', '18:00', 45],
@@ -27,6 +28,7 @@ function buildServices({ horario = HORARIO_LABORAL, bloqueos = [], citas = [], u
       _bloqueos: [BLOQUEOS_HEADER, ...bloqueos],
       _citas: [CITAS_HEADER, ...citas],
       _usuarios: [USUARIOS_HEADER, ...usuarios],
+      _log: [LOG_HEADER],
     },
   });
 }
@@ -189,6 +191,46 @@ describe('crearCita', () => {
     });
     const result = crearCita({ fecha: '2026-06-15', horaInicio: '09:00', pacienteCodigo: 'PAC002' }, USER_RECEPCION, services);
     expect(result.ok).toBe(true);
+  });
+});
+
+describe('crearCita - integracion con Calendar', () => {
+  it('crea el evento en "Consultas SMPDJM" y guarda calendarEventId', () => {
+    const services = buildServices({
+      usuarios: [['PAC001', 'h', 's', 'usuario', 'M. Garcia']],
+    });
+    const result = crearCita({ fecha: '2026-06-15', horaInicio: '09:00', pacienteCodigo: 'PAC001' }, USER_RECEPCION, services);
+    expect(result.ok).toBe(true);
+
+    const filas = services.SpreadsheetApp._sheets['_citas'];
+    const fila = filas.find((r) => r[0] === result.cita.id);
+    expect(fila[9]).not.toBe('');
+
+    const calendario = services.CalendarApp.getCalendarsByName('Consultas SMPDJM')[0];
+    const evento = calendario.getEventById(fila[9]);
+    expect(evento.getTitle()).toBe('Consulta: M. Garcia');
+  });
+
+  it('si Calendar falla, la cita se guarda igual con calendarEventId vacio y se registra el error', () => {
+    const services = buildServices({
+      usuarios: [['PAC001', 'h', 's', 'usuario', 'M. Garcia']],
+    });
+    const calendario = services.CalendarApp.createCalendar('Consultas SMPDJM');
+    vi.spyOn(calendario, 'createEvent').mockImplementation(() => {
+      throw new Error('Calendar API error');
+    });
+
+    const result = crearCita({ fecha: '2026-06-15', horaInicio: '09:00', pacienteCodigo: 'PAC001' }, USER_RECEPCION, services);
+    expect(result.ok).toBe(true);
+
+    const filas = services.SpreadsheetApp._sheets['_citas'];
+    const fila = filas.find((r) => r[0] === result.cita.id);
+    expect(fila[9]).toBe('');
+
+    const logRows = services.SpreadsheetApp._sheets['_log'];
+    const logEntry = logRows.find((r) => r[3] === 'calendario_error');
+    expect(logEntry).toBeDefined();
+    expect(logEntry[4]).toMatch(/crearCita/);
   });
 });
 
