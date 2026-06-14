@@ -5,9 +5,22 @@ import { handleGet, handlePost } from '../src/router.js';
 
 const USUARIOS_HEADER = ['codigo', 'password', 'salt', 'rol', 'nombre'];
 const LOG_HEADER = ['timestamp', 'codigo', 'rol', 'accion', 'detalle'];
+const HORARIO_HEADER = ['diaSemana', 'activo', 'horaInicio', 'horaFin', 'duracionSlotMin'];
+const BLOQUEOS_HEADER = ['id', 'fechaInicio', 'fechaFin', 'motivo', 'creadoPor', 'fechaCreacion'];
+const CITAS_HEADER = ['id', 'fecha', 'horaInicio', 'horaFin', 'pacienteCodigo', 'estado', 'creadoPor', 'fechaCreacion', 'fechaActualizacion'];
 
-function buildServicesWithUser({ codigo, password, rol, nombre }) {
-  const services = createMockServices({ sheets: { _usuarios: [USUARIOS_HEADER], _log: [LOG_HEADER] } });
+const HORARIO_LABORAL = [
+  ['Lunes', true, '09:00', '18:00', 45],
+  ['Martes', true, '09:00', '18:00', 45],
+  ['Miercoles', true, '09:00', '18:00', 45],
+  ['Jueves', true, '09:00', '18:00', 45],
+  ['Viernes', true, '09:00', '18:00', 45],
+  ['Sabado', false, '09:00', '13:00', 45],
+  ['Domingo', false, '09:00', '13:00', 45],
+];
+
+function buildServicesWithUser({ codigo, password, rol, nombre, extraSheets = {} }) {
+  const services = createMockServices({ sheets: { _usuarios: [USUARIOS_HEADER], _log: [LOG_HEADER], ...extraSheets } });
   const salt = generarSalt(services);
   const passwordHash = generarHashSHA256(password + salt, services);
   services.SpreadsheetApp._sheets['_usuarios'].push([codigo, passwordHash, salt, rol, nombre]);
@@ -54,6 +67,109 @@ describe('handleGet', () => {
 
     const result = handleGet({ parameter: { accion: 'listarUsuarios', token } }, services);
     expect(bodyOf(result)).toEqual({ ok: true, usuarios: [{ codigo: 'ADM001', rol: 'administrador', nombre: 'Admin' }] });
+  });
+
+  it('leerAgenda requiere rol administrador, psiquiatra o recepcion', () => {
+    const services = buildServicesWithUser({ codigo: 'USR001', password: 'secreta123', rol: 'usuario', nombre: 'Paciente' });
+    const token = loginToken(services, 'USR001', 'secreta123');
+
+    const result = handleGet({ parameter: { accion: 'leerAgenda', token, fechaInicio: '2026-06-15', fechaFin: '2026-06-15' } }, services);
+    expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
+  });
+
+  it('leerAgenda devuelve los slots de la semana para recepcion', () => {
+    const services = buildServicesWithUser({
+      codigo: 'REC001', password: 'secreta123', rol: 'recepcion', nombre: 'Recepcion',
+      extraSheets: { _horario_config: [HORARIO_HEADER, ...HORARIO_LABORAL] },
+    });
+    const token = loginToken(services, 'REC001', 'secreta123');
+
+    const result = handleGet({ parameter: { accion: 'leerAgenda', token, fechaInicio: '2026-06-15', fechaFin: '2026-06-15' } }, services);
+    const body = bodyOf(result);
+    expect(body.ok).toBe(true);
+    expect(body.slots).toHaveLength(12);
+    expect(body.horarioConfig).toHaveLength(7);
+  });
+
+  it('leerMiAgenda requiere rol usuario', () => {
+    const services = buildServicesWithUser({ codigo: 'REC001', password: 'secreta123', rol: 'recepcion', nombre: 'Recepcion' });
+    const token = loginToken(services, 'REC001', 'secreta123');
+
+    const result = handleGet({ parameter: { accion: 'leerMiAgenda', token } }, services);
+    expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
+  });
+
+  it('leerMiAgenda devuelve las citas propias del paciente', () => {
+    const services = buildServicesWithUser({
+      codigo: 'USR001', password: 'secreta123', rol: 'usuario', nombre: 'Paciente',
+      extraSheets: {
+        _citas: [CITAS_HEADER, ['c1', '2099-01-01', '09:00', '09:45', 'USR001', 'Programada', 'ADM001', new Date(), new Date()]],
+      },
+    });
+    const token = loginToken(services, 'USR001', 'secreta123');
+
+    const result = handleGet({ parameter: { accion: 'leerMiAgenda', token } }, services);
+    const body = bodyOf(result);
+    expect(body.ok).toBe(true);
+    expect(body.proximas).toEqual([{ id: 'c1', fecha: '2099-01-01', horaInicio: '09:00', horaFin: '09:45', estado: 'Programada' }]);
+    expect(body.historial).toEqual([]);
+  });
+
+  it('leerHorarioConfig requiere rol administrador, psiquiatra o recepcion', () => {
+    const services = buildServicesWithUser({ codigo: 'USR001', password: 'secreta123', rol: 'usuario', nombre: 'Paciente' });
+    const token = loginToken(services, 'USR001', 'secreta123');
+
+    const result = handleGet({ parameter: { accion: 'leerHorarioConfig', token } }, services);
+    expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
+  });
+
+  it('leerHorarioConfig devuelve el horario configurado para recepcion', () => {
+    const services = buildServicesWithUser({
+      codigo: 'REC001', password: 'secreta123', rol: 'recepcion', nombre: 'Recepcion',
+      extraSheets: { _horario_config: [HORARIO_HEADER, ...HORARIO_LABORAL] },
+    });
+    const token = loginToken(services, 'REC001', 'secreta123');
+
+    const result = handleGet({ parameter: { accion: 'leerHorarioConfig', token } }, services);
+    const body = bodyOf(result);
+    expect(body.ok).toBe(true);
+    expect(body.horario).toHaveLength(7);
+  });
+
+  it('leerBloqueos requiere rol administrador, psiquiatra o recepcion', () => {
+    const services = buildServicesWithUser({ codigo: 'USR001', password: 'secreta123', rol: 'usuario', nombre: 'Paciente' });
+    const token = loginToken(services, 'USR001', 'secreta123');
+
+    const result = handleGet({ parameter: { accion: 'leerBloqueos', token } }, services);
+    expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
+  });
+
+  it('leerBloqueos devuelve los bloqueos para recepcion', () => {
+    const services = buildServicesWithUser({
+      codigo: 'REC001', password: 'secreta123', rol: 'recepcion', nombre: 'Recepcion',
+      extraSheets: { _bloqueos: [BLOQUEOS_HEADER, ['b1', '2026-07-01', '2026-07-15', 'Vacaciones', 'ADM001', new Date()]] },
+    });
+    const token = loginToken(services, 'REC001', 'secreta123');
+
+    const result = handleGet({ parameter: { accion: 'leerBloqueos', token } }, services);
+    expect(bodyOf(result)).toEqual({ ok: true, bloqueos: [{ id: 'b1', fechaInicio: '2026-07-01', fechaFin: '2026-07-15', motivo: 'Vacaciones' }] });
+  });
+
+  it('listarPacientes requiere rol administrador, psiquiatra o recepcion', () => {
+    const services = buildServicesWithUser({ codigo: 'USR001', password: 'secreta123', rol: 'usuario', nombre: 'Paciente' });
+    const token = loginToken(services, 'USR001', 'secreta123');
+
+    const result = handleGet({ parameter: { accion: 'listarPacientes', token } }, services);
+    expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
+  });
+
+  it('listarPacientes devuelve los pacientes para recepcion', () => {
+    const services = buildServicesWithUser({ codigo: 'REC001', password: 'secreta123', rol: 'recepcion', nombre: 'Recepcion' });
+    services.SpreadsheetApp._sheets['_usuarios'].push(['PAC001', 'hash', 'salt', 'usuario', 'Paciente Uno']);
+    const token = loginToken(services, 'REC001', 'secreta123');
+
+    const result = handleGet({ parameter: { accion: 'listarPacientes', token } }, services);
+    expect(bodyOf(result)).toEqual({ ok: true, pacientes: [{ codigo: 'PAC001', nombre: 'Paciente Uno' }] });
   });
 });
 
@@ -128,6 +244,165 @@ describe('handlePost', () => {
 
     const result = handlePost(
       { postData: { contents: JSON.stringify({ accion: 'cambiarPassword', token, passwordActual: 'claveVieja', passwordNueva: 'claveNueva123' }) } },
+      services
+    );
+    expect(bodyOf(result)).toEqual({ ok: true });
+  });
+
+  it('crearCita requiere rol administrador, psiquiatra o recepcion', () => {
+    const services = buildServicesWithUser({ codigo: 'USR001', password: 'secreta123', rol: 'usuario', nombre: 'Paciente' });
+    const token = loginToken(services, 'USR001', 'secreta123');
+
+    const result = handlePost(
+      { postData: { contents: JSON.stringify({ accion: 'crearCita', token, fecha: '2026-06-15', horaInicio: '09:00', pacienteCodigo: 'PAC001' }) } },
+      services
+    );
+    expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
+  });
+
+  it('crearCita crea una cita para recepcion', () => {
+    const services = buildServicesWithUser({
+      codigo: 'REC001', password: 'secreta123', rol: 'recepcion', nombre: 'Recepcion',
+      extraSheets: { _horario_config: [HORARIO_HEADER, ...HORARIO_LABORAL], _citas: [CITAS_HEADER] },
+    });
+    services.SpreadsheetApp._sheets['_usuarios'].push(['PAC001', 'hash', 'salt', 'usuario', 'Paciente Uno']);
+    const token = loginToken(services, 'REC001', 'secreta123');
+
+    const result = handlePost(
+      { postData: { contents: JSON.stringify({ accion: 'crearCita', token, fecha: '2026-06-15', horaInicio: '09:00', pacienteCodigo: 'PAC001' }) } },
+      services
+    );
+    const body = bodyOf(result);
+    expect(body.ok).toBe(true);
+    expect(body.cita).toMatchObject({ fecha: '2026-06-15', horaInicio: '09:00', horaFin: '09:45', pacienteCodigo: 'PAC001', pacienteNombre: 'Paciente Uno', estado: 'Programada' });
+  });
+
+  it('cambiarEstadoCita requiere rol administrador, psiquiatra o recepcion', () => {
+    const services = buildServicesWithUser({ codigo: 'USR001', password: 'secreta123', rol: 'usuario', nombre: 'Paciente' });
+    const token = loginToken(services, 'USR001', 'secreta123');
+
+    const result = handlePost(
+      { postData: { contents: JSON.stringify({ accion: 'cambiarEstadoCita', token, citaId: 'c1', estado: 'Completada' }) } },
+      services
+    );
+    expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
+  });
+
+  it('cambiarEstadoCita actualiza el estado para recepcion', () => {
+    const services = buildServicesWithUser({
+      codigo: 'REC001', password: 'secreta123', rol: 'recepcion', nombre: 'Recepcion',
+      extraSheets: { _citas: [CITAS_HEADER, ['c1', '2026-06-15', '09:00', '09:45', 'PAC001', 'Programada', 'ADM001', new Date(), new Date()]] },
+    });
+    const token = loginToken(services, 'REC001', 'secreta123');
+
+    const result = handlePost(
+      { postData: { contents: JSON.stringify({ accion: 'cambiarEstadoCita', token, citaId: 'c1', estado: 'Completada' }) } },
+      services
+    );
+    expect(bodyOf(result)).toEqual({ ok: true });
+  });
+
+  it('cancelarMiCita requiere rol usuario', () => {
+    const services = buildServicesWithUser({ codigo: 'REC001', password: 'secreta123', rol: 'recepcion', nombre: 'Recepcion' });
+    const token = loginToken(services, 'REC001', 'secreta123');
+
+    const result = handlePost(
+      { postData: { contents: JSON.stringify({ accion: 'cancelarMiCita', token, citaId: 'c1' }) } },
+      services
+    );
+    expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
+  });
+
+  it('cancelarMiCita cancela una cita propia para usuario', () => {
+    const services = buildServicesWithUser({
+      codigo: 'USR001', password: 'secreta123', rol: 'usuario', nombre: 'Paciente',
+      extraSheets: { _citas: [CITAS_HEADER, ['c1', '2026-06-15', '09:00', '09:45', 'USR001', 'Programada', 'ADM001', new Date(), new Date()]] },
+    });
+    const token = loginToken(services, 'USR001', 'secreta123');
+
+    const result = handlePost(
+      { postData: { contents: JSON.stringify({ accion: 'cancelarMiCita', token, citaId: 'c1' }) } },
+      services
+    );
+    expect(bodyOf(result)).toEqual({ ok: true });
+  });
+
+  it('actualizarHorarioConfig requiere rol administrador o psiquiatra', () => {
+    const services = buildServicesWithUser({ codigo: 'REC001', password: 'secreta123', rol: 'recepcion', nombre: 'Recepcion' });
+    const token = loginToken(services, 'REC001', 'secreta123');
+
+    const result = handlePost(
+      { postData: { contents: JSON.stringify({ accion: 'actualizarHorarioConfig', token, horario: [] }) } },
+      services
+    );
+    expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
+  });
+
+  it('actualizarHorarioConfig guarda el horario para administrador', () => {
+    const services = buildServicesWithUser({
+      codigo: 'ADM001', password: 'secreta123', rol: 'administrador', nombre: 'Admin',
+      extraSheets: { _horario_config: [HORARIO_HEADER, ...HORARIO_LABORAL] },
+    });
+    const token = loginToken(services, 'ADM001', 'secreta123');
+
+    const nuevoHorario = HORARIO_LABORAL.map(([diaSemana, activo, horaInicio, horaFin, duracionSlotMin]) => ({
+      diaSemana, activo, horaInicio, horaFin, duracionSlotMin,
+    }));
+
+    const result = handlePost(
+      { postData: { contents: JSON.stringify({ accion: 'actualizarHorarioConfig', token, horario: nuevoHorario }) } },
+      services
+    );
+    expect(bodyOf(result)).toEqual({ ok: true });
+  });
+
+  it('crearBloqueo requiere rol administrador o psiquiatra', () => {
+    const services = buildServicesWithUser({ codigo: 'REC001', password: 'secreta123', rol: 'recepcion', nombre: 'Recepcion' });
+    const token = loginToken(services, 'REC001', 'secreta123');
+
+    const result = handlePost(
+      { postData: { contents: JSON.stringify({ accion: 'crearBloqueo', token, fechaInicio: '2026-07-01', fechaFin: '2026-07-15', motivo: 'Vacaciones' }) } },
+      services
+    );
+    expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
+  });
+
+  it('crearBloqueo crea un bloqueo para administrador', () => {
+    const services = buildServicesWithUser({
+      codigo: 'ADM001', password: 'secreta123', rol: 'administrador', nombre: 'Admin',
+      extraSheets: { _bloqueos: [BLOQUEOS_HEADER] },
+    });
+    const token = loginToken(services, 'ADM001', 'secreta123');
+
+    const result = handlePost(
+      { postData: { contents: JSON.stringify({ accion: 'crearBloqueo', token, fechaInicio: '2026-07-01', fechaFin: '2026-07-15', motivo: 'Vacaciones' }) } },
+      services
+    );
+    const body = bodyOf(result);
+    expect(body.ok).toBe(true);
+    expect(body.bloqueo).toMatchObject({ fechaInicio: '2026-07-01', fechaFin: '2026-07-15', motivo: 'Vacaciones' });
+  });
+
+  it('eliminarBloqueo requiere rol administrador o psiquiatra', () => {
+    const services = buildServicesWithUser({ codigo: 'REC001', password: 'secreta123', rol: 'recepcion', nombre: 'Recepcion' });
+    const token = loginToken(services, 'REC001', 'secreta123');
+
+    const result = handlePost(
+      { postData: { contents: JSON.stringify({ accion: 'eliminarBloqueo', token, bloqueoId: 'b1' }) } },
+      services
+    );
+    expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
+  });
+
+  it('eliminarBloqueo elimina un bloqueo para administrador', () => {
+    const services = buildServicesWithUser({
+      codigo: 'ADM001', password: 'secreta123', rol: 'administrador', nombre: 'Admin',
+      extraSheets: { _bloqueos: [BLOQUEOS_HEADER, ['b1', '2026-07-01', '2026-07-15', 'Vacaciones', 'ADM001', new Date()]] },
+    });
+    const token = loginToken(services, 'ADM001', 'secreta123');
+
+    const result = handlePost(
+      { postData: { contents: JSON.stringify({ accion: 'eliminarBloqueo', token, bloqueoId: 'b1' }) } },
       services
     );
     expect(bodyOf(result)).toEqual({ ok: true });
