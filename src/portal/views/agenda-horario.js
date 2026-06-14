@@ -38,6 +38,83 @@ export function initAgendaHorarioView(container, ctx) {
     wrapper.appendChild(guardarButton);
   }
 
+  const bloqueosHeading = document.createElement('h2');
+  bloqueosHeading.textContent = 'Bloqueos';
+  wrapper.appendChild(bloqueosHeading);
+
+  const bloqueosError = document.createElement('div');
+  bloqueosError.className = 'view-agenda-horario__bloqueos-error';
+  bloqueosError.hidden = true;
+  wrapper.appendChild(bloqueosError);
+
+  const bloqueosList = document.createElement('ul');
+  bloqueosList.className = 'view-agenda-horario__bloqueos-list';
+  wrapper.appendChild(bloqueosList);
+
+  if (puedeEditar) {
+    const bloqueoForm = document.createElement('form');
+    bloqueoForm.className = 'view-agenda-horario__bloqueo-form';
+
+    const fechaInicioInput = document.createElement('input');
+    fechaInicioInput.type = 'date';
+    fechaInicioInput.className = 'view-agenda-horario__bloqueo-fecha-inicio';
+    bloqueoForm.appendChild(fechaInicioInput);
+
+    const fechaFinInput = document.createElement('input');
+    fechaFinInput.type = 'date';
+    fechaFinInput.className = 'view-agenda-horario__bloqueo-fecha-fin';
+    bloqueoForm.appendChild(fechaFinInput);
+
+    const motivoInput = document.createElement('input');
+    motivoInput.type = 'text';
+    motivoInput.placeholder = 'Motivo (opcional)';
+    motivoInput.className = 'view-agenda-horario__bloqueo-motivo';
+    bloqueoForm.appendChild(motivoInput);
+
+    const agregarButton = document.createElement('button');
+    agregarButton.type = 'submit';
+    agregarButton.className = 'button button--primary view-agenda-horario__bloqueo-agregar';
+    agregarButton.textContent = 'Agregar bloqueo';
+    bloqueoForm.appendChild(agregarButton);
+
+    bloqueoForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      handleCrearBloqueo(false);
+    });
+
+    wrapper.appendChild(bloqueoForm);
+
+    const bloqueoConfirm = document.createElement('div');
+    bloqueoConfirm.className = 'view-agenda-horario__bloqueo-confirm';
+    bloqueoConfirm.hidden = true;
+
+    const confirmText = document.createElement('p');
+    confirmText.textContent = 'Hay citas programadas en este rango:';
+    bloqueoConfirm.appendChild(confirmText);
+
+    const citasAfectadasList = document.createElement('ul');
+    citasAfectadasList.className = 'view-agenda-horario__citas-afectadas';
+    bloqueoConfirm.appendChild(citasAfectadasList);
+
+    const confirmarButton = document.createElement('button');
+    confirmarButton.type = 'button';
+    confirmarButton.className = 'button button--primary view-agenda-horario__bloqueo-confirmar';
+    confirmarButton.textContent = 'Crear bloqueo de todos modos';
+    confirmarButton.addEventListener('click', () => handleCrearBloqueo(true));
+    bloqueoConfirm.appendChild(confirmarButton);
+
+    const cancelarConfirmButton = document.createElement('button');
+    cancelarConfirmButton.type = 'button';
+    cancelarConfirmButton.className = 'view-agenda-horario__bloqueo-cancelar-confirm';
+    cancelarConfirmButton.textContent = 'Cancelar';
+    cancelarConfirmButton.addEventListener('click', () => {
+      bloqueoConfirm.hidden = true;
+    });
+    bloqueoConfirm.appendChild(cancelarConfirmButton);
+
+    wrapper.appendChild(bloqueoConfirm);
+  }
+
   container.appendChild(wrapper);
 
   function showError(message) {
@@ -145,5 +222,90 @@ export function initAgendaHorarioView(container, ctx) {
     await loadHorario();
   }
 
+  async function loadBloqueos() {
+    const result = await apiGet('leerBloqueos', { token: ctx.session.token });
+    if (result.error) {
+      if (handleAuthError(result)) return;
+      bloqueosError.textContent = result.error;
+      bloqueosError.hidden = false;
+      return;
+    }
+    bloqueosError.hidden = true;
+    renderBloqueosList(result.bloqueos);
+  }
+
+  function renderBloqueosList(bloqueos) {
+    bloqueosList.innerHTML = '';
+    bloqueos.forEach((bloqueo) => {
+      const li = document.createElement('li');
+      li.className = 'view-agenda-horario__bloqueo-item';
+      li.dataset.id = bloqueo.id;
+
+      const texto = document.createElement('span');
+      texto.textContent = `${bloqueo.fechaInicio} – ${bloqueo.fechaFin}: ${bloqueo.motivo}`;
+      li.appendChild(texto);
+
+      if (puedeEditar) {
+        const eliminarButton = document.createElement('button');
+        eliminarButton.type = 'button';
+        eliminarButton.className = 'view-agenda-horario__bloqueo-eliminar';
+        eliminarButton.textContent = 'Eliminar';
+        eliminarButton.addEventListener('click', () => handleEliminarBloqueo(bloqueo.id));
+        li.appendChild(eliminarButton);
+      }
+
+      bloqueosList.appendChild(li);
+    });
+  }
+
+  async function handleEliminarBloqueo(bloqueoId) {
+    if (!window.confirm('¿Eliminar este bloqueo?')) return;
+    const result = await apiPost({ accion: 'eliminarBloqueo', token: ctx.session.token, bloqueoId });
+    if (result.error) {
+      if (handleAuthError(result)) return;
+      bloqueosError.textContent = result.error;
+      bloqueosError.hidden = false;
+      return;
+    }
+    bloqueosError.hidden = true;
+    await loadBloqueos();
+  }
+
+  async function handleCrearBloqueo(confirmar) {
+    bloqueosError.hidden = true;
+
+    const fechaInicio = wrapper.querySelector('.view-agenda-horario__bloqueo-fecha-inicio').value;
+    const fechaFin = wrapper.querySelector('.view-agenda-horario__bloqueo-fecha-fin').value;
+    const motivo = wrapper.querySelector('.view-agenda-horario__bloqueo-motivo').value;
+
+    const result = await apiPost({ accion: 'crearBloqueo', token: ctx.session.token, fechaInicio, fechaFin, motivo, confirmar });
+    if (result.error) {
+      if (handleAuthError(result)) return;
+      bloqueosError.textContent = result.error;
+      bloqueosError.hidden = false;
+      return;
+    }
+
+    const bloqueoConfirm = wrapper.querySelector('.view-agenda-horario__bloqueo-confirm');
+    if (result.requiereConfirmacion) {
+      const citasAfectadasList = wrapper.querySelector('.view-agenda-horario__citas-afectadas');
+      citasAfectadasList.innerHTML = '';
+      result.citasAfectadas.forEach((cita) => {
+        const li = document.createElement('li');
+        li.textContent = `${cita.fecha} ${cita.horaInicio} - ${cita.pacienteNombre}`;
+        citasAfectadasList.appendChild(li);
+      });
+      bloqueoConfirm.hidden = false;
+      return;
+    }
+
+    bloqueoConfirm.hidden = true;
+    wrapper.querySelector('.view-agenda-horario__bloqueo-fecha-inicio').value = '';
+    wrapper.querySelector('.view-agenda-horario__bloqueo-fecha-fin').value = '';
+    wrapper.querySelector('.view-agenda-horario__bloqueo-motivo').value = '';
+    await loadBloqueos();
+  }
+
   loadHorario();
+  loadBloqueos();
 }

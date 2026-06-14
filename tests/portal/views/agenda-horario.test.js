@@ -21,6 +21,10 @@ const HORARIO = [
   { diaSemana: 'Domingo', activo: false, horaInicio: '09:00', horaFin: '13:00', duracionSlotMin: 45 },
 ];
 
+const BLOQUEOS = [
+  { id: 'b1', fechaInicio: '2026-07-01', fechaFin: '2026-07-15', motivo: 'Vacaciones' },
+];
+
 function flush() {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
@@ -34,7 +38,11 @@ describe('initAgendaHorarioView', () => {
     container = document.getElementById('main');
     setSession(ADMIN_SESSION);
     vi.stubGlobal('location', { href: '', search: '' });
-    apiGet.mockResolvedValue({ ok: true, horario: HORARIO });
+    apiGet.mockImplementation((accion) => {
+      if (accion === 'leerHorarioConfig') return Promise.resolve({ ok: true, horario: HORARIO });
+      if (accion === 'leerBloqueos') return Promise.resolve({ ok: true, bloqueos: BLOQUEOS });
+      return Promise.resolve({ error: 'Accion no reconocida' });
+    });
     apiPost.mockReset();
   });
 
@@ -87,7 +95,7 @@ describe('initAgendaHorarioView', () => {
         { diaSemana: 'Domingo', activo: false, horaInicio: '09:00', horaFin: '13:00', duracionSlotMin: 45 },
       ],
     });
-    expect(apiGet).toHaveBeenCalledTimes(2);
+    expect(apiGet).toHaveBeenCalledTimes(3);
   });
 
   it('deshabilita los controles y oculta el boton Guardar horario para recepcion', async () => {
@@ -125,5 +133,135 @@ describe('initAgendaHorarioView', () => {
 
     expect(getSession()).toBeNull();
     expect(window.location.href).toBe('/portal/?expired=1');
+  });
+
+  describe('bloqueos', () => {
+    it('renderiza la lista de bloqueos existentes y el boton Eliminar para administrador', async () => {
+      initAgendaHorarioView(container, { session: ADMIN_SESSION, forced: false });
+      await flush();
+
+      expect(apiGet).toHaveBeenCalledWith('leerBloqueos', { token: 'admin-tok' });
+      const items = container.querySelectorAll('.view-agenda-horario__bloqueo-item');
+      expect(items.length).toBe(1);
+      expect(items[0].textContent).toContain('2026-07-01 – 2026-07-15: Vacaciones');
+      expect(items[0].querySelector('.view-agenda-horario__bloqueo-eliminar')).not.toBeNull();
+    });
+
+    it('permite eliminar un bloqueo para administrador', async () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      apiPost.mockResolvedValue({ ok: true });
+
+      initAgendaHorarioView(container, { session: ADMIN_SESSION, forced: false });
+      await flush();
+
+      container.querySelector('.view-agenda-horario__bloqueo-eliminar').click();
+      await flush();
+
+      expect(apiPost).toHaveBeenCalledWith({ accion: 'eliminarBloqueo', token: 'admin-tok', bloqueoId: 'b1' });
+      const bloqueosCalls = apiGet.mock.calls.filter(([accion]) => accion === 'leerBloqueos');
+      expect(bloqueosCalls.length).toBe(2);
+    });
+
+    it('no elimina un bloqueo si se cancela la confirmacion', async () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+      initAgendaHorarioView(container, { session: ADMIN_SESSION, forced: false });
+      await flush();
+
+      container.querySelector('.view-agenda-horario__bloqueo-eliminar').click();
+      await flush();
+
+      expect(apiPost).not.toHaveBeenCalled();
+    });
+
+    it('permite agregar un bloqueo sin citas afectadas para administrador', async () => {
+      apiPost.mockResolvedValue({ ok: true, bloqueo: { id: 'b2', fechaInicio: '2026-08-01', fechaFin: '2026-08-10', motivo: 'Curso' } });
+
+      initAgendaHorarioView(container, { session: ADMIN_SESSION, forced: false });
+      await flush();
+
+      container.querySelector('.view-agenda-horario__bloqueo-fecha-inicio').value = '2026-08-01';
+      container.querySelector('.view-agenda-horario__bloqueo-fecha-fin').value = '2026-08-10';
+      container.querySelector('.view-agenda-horario__bloqueo-motivo').value = 'Curso';
+      container.querySelector('.view-agenda-horario__bloqueo-form').dispatchEvent(new Event('submit', { cancelable: true }));
+      await flush();
+
+      expect(apiPost).toHaveBeenCalledWith({
+        accion: 'crearBloqueo',
+        token: 'admin-tok',
+        fechaInicio: '2026-08-01',
+        fechaFin: '2026-08-10',
+        motivo: 'Curso',
+        confirmar: false,
+      });
+      const bloqueosCalls = apiGet.mock.calls.filter(([accion]) => accion === 'leerBloqueos');
+      expect(bloqueosCalls.length).toBe(2);
+      expect(container.querySelector('.view-agenda-horario__bloqueo-fecha-inicio').value).toBe('');
+    });
+
+    it('muestra confirmacion si hay citas afectadas y permite confirmar la creacion', async () => {
+      apiPost
+        .mockResolvedValueOnce({
+          ok: false,
+          requiereConfirmacion: true,
+          citasAfectadas: [{ id: 'c1', fecha: '2026-07-05', horaInicio: '09:00', pacienteNombre: 'M. Garcia' }],
+        })
+        .mockResolvedValueOnce({ ok: true, bloqueo: { id: 'b2', fechaInicio: '2026-07-01', fechaFin: '2026-07-15', motivo: 'Vacaciones' } });
+
+      initAgendaHorarioView(container, { session: ADMIN_SESSION, forced: false });
+      await flush();
+
+      container.querySelector('.view-agenda-horario__bloqueo-fecha-inicio').value = '2026-07-01';
+      container.querySelector('.view-agenda-horario__bloqueo-fecha-fin').value = '2026-07-15';
+      container.querySelector('.view-agenda-horario__bloqueo-motivo').value = 'Vacaciones';
+      container.querySelector('.view-agenda-horario__bloqueo-form').dispatchEvent(new Event('submit', { cancelable: true }));
+      await flush();
+
+      const confirmBox = container.querySelector('.view-agenda-horario__bloqueo-confirm');
+      expect(confirmBox.hidden).toBe(false);
+      const citasAfectadas = confirmBox.querySelectorAll('.view-agenda-horario__citas-afectadas li');
+      expect(citasAfectadas.length).toBe(1);
+      expect(citasAfectadas[0].textContent).toBe('2026-07-05 09:00 - M. Garcia');
+
+      container.querySelector('.view-agenda-horario__bloqueo-confirmar').click();
+      await flush();
+
+      expect(apiPost).toHaveBeenLastCalledWith({
+        accion: 'crearBloqueo',
+        token: 'admin-tok',
+        fechaInicio: '2026-07-01',
+        fechaFin: '2026-07-15',
+        motivo: 'Vacaciones',
+        confirmar: true,
+      });
+      expect(confirmBox.hidden).toBe(true);
+    });
+
+    it('muestra un error inline si crearBloqueo falla', async () => {
+      apiPost.mockResolvedValue({ error: 'fechaInicio debe ser anterior o igual a fechaFin' });
+
+      initAgendaHorarioView(container, { session: ADMIN_SESSION, forced: false });
+      await flush();
+
+      container.querySelector('.view-agenda-horario__bloqueo-fecha-inicio').value = '2026-07-15';
+      container.querySelector('.view-agenda-horario__bloqueo-fecha-fin').value = '2026-07-01';
+      container.querySelector('.view-agenda-horario__bloqueo-form').dispatchEvent(new Event('submit', { cancelable: true }));
+      await flush();
+
+      const bloqueosError = container.querySelector('.view-agenda-horario__bloqueos-error');
+      expect(bloqueosError.textContent).toBe('fechaInicio debe ser anterior o igual a fechaFin');
+      expect(bloqueosError.hidden).toBe(false);
+    });
+
+    it('oculta el formulario de bloqueos y el boton Eliminar para recepcion', async () => {
+      initAgendaHorarioView(container, { session: RECEPCION_SESSION, forced: false });
+      await flush();
+
+      expect(container.querySelector('.view-agenda-horario__bloqueo-form')).toBeNull();
+      expect(container.querySelector('.view-agenda-horario__bloqueo-eliminar')).toBeNull();
+      const items = container.querySelectorAll('.view-agenda-horario__bloqueo-item');
+      expect(items.length).toBe(1);
+      expect(items[0].textContent).toContain('2026-07-01 – 2026-07-15: Vacaciones');
+    });
   });
 });
