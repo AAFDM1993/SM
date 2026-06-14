@@ -2,7 +2,7 @@ import { findUser } from './usuarios.js';
 
 const SHEET_HORARIO_CONFIG = '_horario_config';
 const SHEET_BLOQUEOS = '_bloqueos';
-const SHEET_CITAS = '_citas';
+const SHEET_CITAS_AGENDA = '_citas';
 
 export function leerHorarioConfig(services) {
   const sheet = services.SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_HORARIO_CONFIG);
@@ -71,7 +71,7 @@ export function actualizarHorarioConfig(b, services) {
 }
 
 function leerCitasProgramadas(services) {
-  const sheet = services.SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_CITAS);
+  const sheet = services.SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_CITAS_AGENDA);
   if (!sheet) return [];
   const last = sheet.getLastRow();
   if (last < 2) return [];
