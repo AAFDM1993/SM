@@ -3,6 +3,7 @@ import { findUser } from './usuarios.js';
 
 const SHEET_CITAS = '_citas';
 const DIAS_SEMANA = ['Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado', 'Domingo'];
+const ESTADOS_CAMBIO_VALIDOS = ['Cancelada', 'Completada'];
 
 function diaSemanaDeFecha(fecha) {
   const date = new Date(`${fecha}T00:00:00`);
@@ -161,4 +162,24 @@ export function crearCita(b, user, services) {
     ok: true,
     cita: { id, fecha, horaInicio, horaFin, pacienteCodigo, pacienteNombre: paciente.nombre, estado: 'Programada' },
   };
+}
+
+export function cambiarEstadoCita(b, services) {
+  const citaId = String(b.citaId || '');
+  const estado = String(b.estado || '');
+  if (!ESTADOS_CAMBIO_VALIDOS.includes(estado)) {
+    return { error: 'Estado invalido' };
+  }
+  const citas = leerCitasRaw(services);
+  const cita = citas.find((c) => c.id === citaId);
+  if (!cita) {
+    return { error: 'Cita no encontrada' };
+  }
+  if (cita.estado !== 'Programada') {
+    return { error: 'Solo se puede cambiar el estado de una cita Programada' };
+  }
+  const sheet = services.SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_CITAS);
+  sheet.getRange(cita._fila, 6, 1, 1).setValue(estado);
+  sheet.getRange(cita._fila, 9, 1, 1).setValue(new Date());
+  return { ok: true };
 }

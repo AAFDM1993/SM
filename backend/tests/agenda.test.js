@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createMockServices } from '../mocks/gas-services.js';
-import { leerAgenda, crearCita } from '../src/agenda.js';
+import { leerAgenda, crearCita, cambiarEstadoCita } from '../src/agenda.js';
 
 const HORARIO_HEADER = ['diaSemana', 'activo', 'horaInicio', 'horaFin', 'duracionSlotMin'];
 const BLOQUEOS_HEADER = ['id', 'fechaInicio', 'fechaFin', 'motivo', 'creadoPor', 'fechaCreacion'];
@@ -188,5 +188,51 @@ describe('crearCita', () => {
     });
     const result = crearCita({ fecha: '2026-06-15', horaInicio: '09:00', pacienteCodigo: 'PAC002' }, USER_RECEPCION, services);
     expect(result.ok).toBe(true);
+  });
+});
+
+describe('cambiarEstadoCita', () => {
+  it('marca una cita Programada como Completada', () => {
+    const services = buildServices({
+      citas: [['c1', '2026-06-15', '09:00', '09:45', 'PAC001', 'Programada', 'ADM001', new Date(), new Date()]],
+    });
+    const result = cambiarEstadoCita({ citaId: 'c1', estado: 'Completada' }, services);
+    expect(result).toEqual({ ok: true });
+
+    const agenda = leerAgenda('2026-06-15', '2026-06-15', services);
+    expect(agenda.slots[0].estadoCita).toBe('Completada');
+  });
+
+  it('marca una cita Programada como Cancelada', () => {
+    const services = buildServices({
+      citas: [['c1', '2026-06-15', '09:00', '09:45', 'PAC001', 'Programada', 'ADM001', new Date(), new Date()]],
+    });
+    const result = cambiarEstadoCita({ citaId: 'c1', estado: 'Cancelada' }, services);
+    expect(result).toEqual({ ok: true });
+
+    const agenda = leerAgenda('2026-06-15', '2026-06-15', services);
+    expect(agenda.slots[0].estado).toBe('disponible');
+  });
+
+  it('rechaza un estado invalido', () => {
+    const services = buildServices({
+      citas: [['c1', '2026-06-15', '09:00', '09:45', 'PAC001', 'Programada', 'ADM001', new Date(), new Date()]],
+    });
+    const result = cambiarEstadoCita({ citaId: 'c1', estado: 'Pendiente' }, services);
+    expect(result).toEqual({ error: 'Estado invalido' });
+  });
+
+  it('rechaza si la cita no existe', () => {
+    const services = buildServices({});
+    const result = cambiarEstadoCita({ citaId: 'no-existe', estado: 'Completada' }, services);
+    expect(result).toEqual({ error: 'Cita no encontrada' });
+  });
+
+  it('rechaza si la cita no esta Programada', () => {
+    const services = buildServices({
+      citas: [['c1', '2026-06-15', '09:00', '09:45', 'PAC001', 'Cancelada', 'ADM001', new Date(), new Date()]],
+    });
+    const result = cambiarEstadoCita({ citaId: 'c1', estado: 'Completada' }, services);
+    expect(result).toEqual({ error: 'Solo se puede cambiar el estado de una cita Programada' });
   });
 });
