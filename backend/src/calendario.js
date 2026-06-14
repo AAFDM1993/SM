@@ -17,3 +17,20 @@ export function obtenerCalendarioConsultas(services) {
   props.setProperty(PROP_CALENDAR_ID, calendario.getId());
   return calendario;
 }
+
+export function crearEventoCita({ fecha, horaInicio, horaFin, pacienteNombre }, services) {
+  const calendario = obtenerCalendarioConsultas(services);
+  const inicio = new Date(`${fecha}T${horaInicio}:00`);
+  const fin = new Date(`${fecha}T${horaFin}:00`);
+  const evento = calendario.createEvent(`Consulta: ${pacienteNombre}`, inicio, fin, {
+    description: 'Cita agendada en SMPDJM.',
+  });
+  return evento.getId();
+}
+
+export function eliminarEventoCita(eventId, services) {
+  if (!eventId) return;
+  const calendario = obtenerCalendarioConsultas(services);
+  const evento = calendario.getEventById(eventId);
+  if (evento) evento.deleteEvent();
+}
