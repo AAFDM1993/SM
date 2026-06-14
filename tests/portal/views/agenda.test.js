@@ -1,0 +1,206 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { apiGet, apiPost } from '../../../src/portal/api.js';
+import { initAgendaView } from '../../../src/portal/views/agenda.js';
+import { initAgendaHorarioView } from '../../../src/portal/views/agenda-horario.js';
+import { setSession, getSession } from '../../../src/portal/session.js';
+
+vi.mock('../../../src/portal/api.js', () => ({
+  apiGet: vi.fn(),
+  apiPost: vi.fn(),
+}));
+
+vi.mock('../../../src/portal/views/agenda-horario.js', () => ({
+  initAgendaHorarioView: vi.fn((container) => {
+    container.textContent = 'agenda-horario-mock';
+  }),
+}));
+
+const ADMIN_SESSION = { token: 'admin-tok', codigo: 'ADM001', rol: 'administrador', nombre: 'Admin', debeCambiarPassword: false };
+
+const AGENDA_RESPONSE = {
+  ok: true,
+  horarioConfig: [],
+  bloqueos: [],
+  slots: [
+    { fecha: '2026-06-15', horaInicio: '09:00', horaFin: '09:45', estado: 'ocupado', citaId: 'c1', pacienteNombre: 'M. Garcia', estadoCita: 'Programada' },
+    { fecha: '2026-06-15', horaInicio: '09:45', horaFin: '10:30', estado: 'disponible' },
+    { fecha: '2026-06-16', horaInicio: '09:00', horaFin: '09:45', estado: 'bloqueado' },
+    { fecha: '2026-06-16', horaInicio: '09:45', horaFin: '10:30', estado: 'disponible' },
+    { fecha: '2026-06-17', horaInicio: '09:00', horaFin: '09:45', estado: 'disponible' },
+  ],
+};
+
+// Reimplementacion local de las funciones de fecha para calcular el valor
+// esperado de "la semana actual" sin depender de mockear el reloj.
+function formatearFecha(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function lunesDeSemana(date) {
+  const dia = (date.getDay() + 6) % 7;
+  const lunes = new Date(date);
+  lunes.setDate(date.getDate() - dia);
+  return lunes;
+}
+
+function sumarDias(date, dias) {
+  const result = new Date(date);
+  result.setDate(date.getDate() + dias);
+  return result;
+}
+
+function ddmm(date) {
+  return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function flush() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+describe('initAgendaView', () => {
+  let container;
+
+  beforeEach(() => {
+    localStorage.clear();
+    document.body.innerHTML = '<main id="main"></main>';
+    container = document.getElementById('main');
+    setSession(ADMIN_SESSION);
+    vi.stubGlobal('location', { href: '', search: '' });
+    apiGet.mockResolvedValue(AGENDA_RESPONSE);
+    apiPost.mockReset();
+    initAgendaHorarioView.mockClear();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  it('renderiza la cuadricula semanal a partir de leerAgenda', async () => {
+    initAgendaView(container, { session: ADMIN_SESSION, forced: false });
+    await flush();
+
+    const headerCells = container.querySelectorAll('.view-agenda__grid thead th');
+    expect(headerCells.length).toBe(4);
+    expect(headerCells[0].textContent).toBe('Hora');
+    expect(headerCells[1].textContent).toBe('Lun 15');
+    expect(headerCells[2].textContent).toBe('Mar 16');
+    expect(headerCells[3].textContent).toBe('Mié 17');
+
+    const rows = container.querySelectorAll('.view-agenda__grid tbody tr');
+    expect(rows.length).toBe(2);
+
+    const row1 = rows[0].querySelectorAll('td');
+    expect(row1[0].textContent).toBe('09:00');
+    expect(row1[1].className).toContain('view-agenda__cell--ocupado');
+    expect(row1[1].textContent).toBe('M. Garcia');
+    expect(row1[1].dataset.citaId).toBe('c1');
+    expect(row1[2].className).toContain('view-agenda__cell--bloqueado');
+    expect(row1[3].className).toContain('view-agenda__cell--disponible');
+
+    const row2 = rows[1].querySelectorAll('td');
+    expect(row2[0].textContent).toBe('09:45');
+    expect(row2[1].className).toContain('view-agenda__cell--disponible');
+    expect(row2[1].dataset.fecha).toBe('2026-06-15');
+    expect(row2[1].dataset.horaInicio).toBe('09:45');
+    expect(row2[2].className).toContain('view-agenda__cell--disponible');
+    expect(row2[3].className).toContain('view-agenda__cell--vacio');
+  });
+
+  it('el rango de fechas por defecto es la semana actual (lunes a domingo)', async () => {
+    initAgendaView(container, { session: ADMIN_SESSION, forced: false });
+    await flush();
+
+    const lunes = lunesDeSemana(new Date());
+    const domingo = sumarDias(lunes, 6);
+    expect(apiGet).toHaveBeenCalledWith('leerAgenda', {
+      token: 'admin-tok',
+      fechaInicio: formatearFecha(lunes),
+      fechaFin: formatearFecha(domingo),
+    });
+  });
+
+  it('muestra el rango de la semana actual en el encabezado', async () => {
+    initAgendaView(container, { session: ADMIN_SESSION, forced: false });
+    await flush();
+
+    const lunes = lunesDeSemana(new Date());
+    const domingo = sumarDias(lunes, 6);
+    expect(container.querySelector('.view-agenda__semana-label').textContent).toBe(
+      `Semana del ${ddmm(lunes)} al ${ddmm(domingo)}`
+    );
+  });
+
+  it('la navegacion recarga leerAgenda con la semana anterior y siguiente', async () => {
+    initAgendaView(container, { session: ADMIN_SESSION, forced: false });
+    await flush();
+
+    const lunes = lunesDeSemana(new Date());
+    const fechaInicioActual = formatearFecha(lunes);
+    const fechaFinActual = formatearFecha(sumarDias(lunes, 6));
+
+    container.querySelector('.view-agenda__prev').click();
+    await flush();
+
+    const lunesAnterior = sumarDias(lunes, -7);
+    expect(apiGet).toHaveBeenLastCalledWith('leerAgenda', {
+      token: 'admin-tok',
+      fechaInicio: formatearFecha(lunesAnterior),
+      fechaFin: formatearFecha(sumarDias(lunesAnterior, 6)),
+    });
+
+    container.querySelector('.view-agenda__next').click();
+    await flush();
+
+    expect(apiGet).toHaveBeenLastCalledWith('leerAgenda', {
+      token: 'admin-tok',
+      fechaInicio: fechaInicioActual,
+      fechaFin: fechaFinActual,
+    });
+  });
+
+  it('el boton Configurar horario abre el panel agenda-horario y Cerrar lo oculta y recarga', async () => {
+    initAgendaView(container, { session: ADMIN_SESSION, forced: false });
+    await flush();
+
+    const panel = container.querySelector('.view-agenda__panel');
+    expect(panel.hidden).toBe(true);
+
+    container.querySelector('.view-agenda__configurar-horario').click();
+
+    expect(panel.hidden).toBe(false);
+    expect(initAgendaHorarioView).toHaveBeenCalledWith(expect.any(HTMLElement), { session: ADMIN_SESSION, forced: false });
+    expect(panel.textContent).toContain('agenda-horario-mock');
+
+    const apiGetCallsBefore = apiGet.mock.calls.length;
+    container.querySelector('.view-agenda__panel-cerrar').click();
+    await flush();
+
+    expect(panel.hidden).toBe(true);
+    expect(apiGet.mock.calls.length).toBe(apiGetCallsBefore + 1);
+  });
+
+  it('muestra un error inline si leerAgenda devuelve un error', async () => {
+    apiGet.mockResolvedValue({ error: 'fechaInicio y fechaFin son requeridos' });
+
+    initAgendaView(container, { session: ADMIN_SESSION, forced: false });
+    await flush();
+
+    const errorEl = container.querySelector('.view-agenda__error');
+    expect(errorEl.textContent).toBe('fechaInicio y fechaFin son requeridos');
+    expect(errorEl.hidden).toBe(false);
+  });
+
+  it('redirige al login si leerAgenda devuelve No autorizado', async () => {
+    apiGet.mockResolvedValue({ error: 'No autorizado' });
+
+    initAgendaView(container, { session: ADMIN_SESSION, forced: false });
+    await flush();
+
+    expect(getSession()).toBeNull();
+    expect(window.location.href).toBe('/portal/?expired=1');
+  });
+});
