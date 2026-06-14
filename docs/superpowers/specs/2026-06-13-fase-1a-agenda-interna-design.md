@@ -360,3 +360,44 @@ Contenido:
   Gmail/Calendar, no en esta fase.
 - **Estado "No asistió"**: descartado para esta fase (solo `Programada` /
   `Cancelada` / `Completada`).
+
+---
+
+## 9. Seguimiento para Fase 1b (revisión final de Fase 1a)
+
+La revisión final de Fase 1a (commits `3eb1e5b..4a17b0a`) encontró y corrigió
+un bug crítico de build (`backend/build.js` no incluía `agenda.js`/
+`horario.js` en el bundle de GAS) y 3 issues de UX (confirmación al cancelar
+una cita, panel de cita obsoleto al navegar/abrir "Configurar horario",
+validación de paciente vacío en "Nueva cita"). Quedan pendientes los
+siguientes puntos para considerar al planificar Fase 1b:
+
+- **Auditoría (`registrarLog`)**: a diferencia de `guardarUsuario`/
+  `eliminarUsuario` (Fase 0), las 6 acciones mutadoras de esta fase
+  (`crearCita`, `cambiarEstadoCita`, `cancelarMiCita`,
+  `actualizarHorarioConfig`, `crearBloqueo`, `eliminarBloqueo`) no registran
+  entradas en el log de auditoría. Decidir si Fase 1b debe agregar logging a
+  estas acciones (consistencia con el resto del sistema) o si se considera
+  deliberadamente fuera de alcance.
+- **Helpers de fecha duplicados**: `formatearFecha`, `lunesDeSemana`,
+  `sumarDias`, `formatearFechaCorta`/`formatearFechaDDMM` están duplicados
+  entre `backend/src/agenda.js`, `src/portal/views/agenda.js` y sus tests.
+  Como Fase 1b incorpora sincronización con Google Calendar (manejo de
+  fechas/zonas horarias más exigente), se recomienda consolidar estos
+  helpers en un módulo compartido como primera tarea de preparación de
+  Fase 1b.
+- **Hojas `_horario_config`/`_bloqueos` ausentes**: `leerHorarioConfig`/
+  `leerBloqueos` devuelven listas vacías silenciosamente si esas hojas no
+  existen en el spreadsheet. Antes del go-live, verificar como checklist de
+  despliegue que ambas hojas existan con las cabeceras correctas en el
+  spreadsheet de producción.
+- **Nice to have** (no bloquean, considerar si se toca el código cercano):
+  duplicación del helper `nombrePaciente` entre `backend/src/agenda.js` y
+  `backend/src/horario.js`; duplicación de strings de formato de fecha entre
+  `agenda.js` y `mi-agenda.js`; nombres `formatearFechaDDMM` vs
+  `formatearFechaCorta` pueden confundirse; agregar al checklist del plan un
+  paso explícito de "actualizar `backend/build.js` FILES" al crear nuevos
+  módulos backend; considerar un chequeo en build-time que detecte
+  declaraciones `const`/`let` duplicadas al concatenar módulos (generalizaría
+  la protección agregada en `backend/tests/build.test.js` para el caso
+  `SHEET_CITAS`/`SHEET_CITAS_AGENDA`).
