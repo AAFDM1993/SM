@@ -39,6 +39,7 @@ describe('build.js', () => {
     globalThis.CacheService = services.CacheService;
     globalThis.PropertiesService = services.PropertiesService;
     globalThis.ContentService = services.ContentService;
+    globalThis.CalendarApp = services.CalendarApp;
 
     try {
       const factory = new Function(`${output}\nreturn { doGet, doPost };`);
@@ -57,6 +58,7 @@ describe('build.js', () => {
       delete globalThis.CacheService;
       delete globalThis.PropertiesService;
       delete globalThis.ContentService;
+      delete globalThis.CalendarApp;
     }
   });
 
@@ -87,6 +89,7 @@ describe('build.js', () => {
     globalThis.CacheService = services.CacheService;
     globalThis.PropertiesService = services.PropertiesService;
     globalThis.ContentService = services.ContentService;
+    globalThis.CalendarApp = services.CalendarApp;
 
     try {
       const factory = new Function(`${output}\nreturn { doGet, doPost };`);
@@ -112,6 +115,15 @@ describe('build.js', () => {
       delete globalThis.CacheService;
       delete globalThis.PropertiesService;
       delete globalThis.ContentService;
+      delete globalThis.CalendarApp;
     }
+  });
+
+  it('incluye calendario.js antes de agenda.js en el bundle (orden de FILES)', () => {
+    const output = readFileSync(OUTPUT_PATH, 'utf8');
+    expect(output).toMatch(/function\s+obtenerCalendarioConsultas/);
+    expect(output).toMatch(/function\s+crearEventoCita/);
+    expect(output).toMatch(/function\s+eliminarEventoCita/);
+    expect(output.indexOf('function crearEventoCita')).toBeLessThan(output.indexOf('function crearCita'));
   });
 });

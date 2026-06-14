@@ -10,6 +10,7 @@ const FILES = [
   'log.js',
   'usuarios.js',
   'horario.js',
+  'calendario.js',
   'agenda.js',
   'auth.js',
   'guards.js',

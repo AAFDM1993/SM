@@ -6,6 +6,7 @@ const gasServices = {
   CacheService,
   PropertiesService,
   ContentService,
+  CalendarApp,
 };
 
 function doGet(e) {
