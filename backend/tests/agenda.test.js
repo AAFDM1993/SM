@@ -239,7 +239,7 @@ describe('cambiarEstadoCita', () => {
     const services = buildServices({
       citas: [['c1', '2026-06-15', '09:00', '09:45', 'PAC001', 'Programada', 'ADM001', new Date(), new Date()]],
     });
-    const result = cambiarEstadoCita({ citaId: 'c1', estado: 'Completada' }, services);
+    const result = cambiarEstadoCita({ citaId: 'c1', estado: 'Completada' }, USER_RECEPCION, services);
     expect(result).toEqual({ ok: true });
 
     const agenda = leerAgenda('2026-06-15', '2026-06-15', services);
@@ -250,7 +250,7 @@ describe('cambiarEstadoCita', () => {
     const services = buildServices({
       citas: [['c1', '2026-06-15', '09:00', '09:45', 'PAC001', 'Programada', 'ADM001', new Date(), new Date()]],
     });
-    const result = cambiarEstadoCita({ citaId: 'c1', estado: 'Cancelada' }, services);
+    const result = cambiarEstadoCita({ citaId: 'c1', estado: 'Cancelada' }, USER_RECEPCION, services);
     expect(result).toEqual({ ok: true });
 
     const agenda = leerAgenda('2026-06-15', '2026-06-15', services);
@@ -261,13 +261,13 @@ describe('cambiarEstadoCita', () => {
     const services = buildServices({
       citas: [['c1', '2026-06-15', '09:00', '09:45', 'PAC001', 'Programada', 'ADM001', new Date(), new Date()]],
     });
-    const result = cambiarEstadoCita({ citaId: 'c1', estado: 'Pendiente' }, services);
+    const result = cambiarEstadoCita({ citaId: 'c1', estado: 'Pendiente' }, USER_RECEPCION, services);
     expect(result).toEqual({ error: 'Estado invalido' });
   });
 
   it('rechaza si la cita no existe', () => {
     const services = buildServices({});
-    const result = cambiarEstadoCita({ citaId: 'no-existe', estado: 'Completada' }, services);
+    const result = cambiarEstadoCita({ citaId: 'no-existe', estado: 'Completada' }, USER_RECEPCION, services);
     expect(result).toEqual({ error: 'Cita no encontrada' });
   });
 
@@ -275,8 +275,55 @@ describe('cambiarEstadoCita', () => {
     const services = buildServices({
       citas: [['c1', '2026-06-15', '09:00', '09:45', 'PAC001', 'Cancelada', 'ADM001', new Date(), new Date()]],
     });
-    const result = cambiarEstadoCita({ citaId: 'c1', estado: 'Completada' }, services);
+    const result = cambiarEstadoCita({ citaId: 'c1', estado: 'Completada' }, USER_RECEPCION, services);
     expect(result).toEqual({ error: 'Solo se puede cambiar el estado de una cita Programada' });
+  });
+});
+
+describe('cambiarEstadoCita - integracion con Calendar', () => {
+  it('al cancelar, elimina el evento de Calendar y limpia calendarEventId', () => {
+    const services = buildServices({
+      citas: [['c1', '2026-06-15', '09:00', '09:45', 'PAC001', 'Programada', 'ADM001', new Date(), new Date(), '']],
+    });
+    const calendario = services.CalendarApp.createCalendar('Consultas SMPDJM');
+    const evento = calendario.createEvent('Consulta: M. Garcia', new Date('2026-06-15T09:00:00'), new Date('2026-06-15T09:45:00'), {});
+    services.SpreadsheetApp._sheets['_citas'][1][9] = evento.getId();
+
+    const result = cambiarEstadoCita({ citaId: 'c1', estado: 'Cancelada' }, USER_RECEPCION, services);
+    expect(result).toEqual({ ok: true });
+
+    expect(calendario.getEventById(evento.getId())).toBeNull();
+    expect(services.SpreadsheetApp._sheets['_citas'][1][9]).toBe('');
+  });
+
+  it('si eliminar el evento falla, la cita igual queda Cancelada y se registra el error', () => {
+    const services = buildServices({
+      citas: [['c1', '2026-06-15', '09:00', '09:45', 'PAC001', 'Programada', 'ADM001', new Date(), new Date(), 'event-1']],
+    });
+    const calendario = services.CalendarApp.createCalendar('Consultas SMPDJM');
+    vi.spyOn(calendario, 'getEventById').mockImplementation(() => {
+      throw new Error('Calendar API error');
+    });
+
+    const result = cambiarEstadoCita({ citaId: 'c1', estado: 'Cancelada' }, USER_RECEPCION, services);
+    expect(result).toEqual({ ok: true });
+
+    const agenda = leerAgenda('2026-06-15', '2026-06-15', services);
+    expect(agenda.slots[0].estado).toBe('disponible');
+
+    const logRows = services.SpreadsheetApp._sheets['_log'];
+    const logEntry = logRows.find((r) => r[3] === 'calendario_error');
+    expect(logEntry).toBeDefined();
+    expect(logEntry[4]).toMatch(/cambiarEstadoCita/);
+  });
+
+  it('al completar, no elimina el evento ni modifica calendarEventId', () => {
+    const services = buildServices({
+      citas: [['c1', '2026-06-15', '09:00', '09:45', 'PAC001', 'Programada', 'ADM001', new Date(), new Date(), 'event-1']],
+    });
+    const result = cambiarEstadoCita({ citaId: 'c1', estado: 'Completada' }, USER_RECEPCION, services);
+    expect(result).toEqual({ ok: true });
+    expect(services.SpreadsheetApp._sheets['_citas'][1][9]).toBe('event-1');
   });
 });
 

@@ -177,7 +177,7 @@ export function crearCita(b, user, services) {
   };
 }
 
-export function cambiarEstadoCita(b, services) {
+export function cambiarEstadoCita(b, user, services) {
   const citaId = String(b.citaId || '');
   const estado = String(b.estado || '');
   if (!ESTADOS_CAMBIO_VALIDOS.includes(estado)) {
@@ -194,6 +194,16 @@ export function cambiarEstadoCita(b, services) {
   const sheet = services.SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_CITAS);
   sheet.getRange(cita._fila, 6, 1, 1).setValue(estado);
   sheet.getRange(cita._fila, 9, 1, 1).setValue(new Date());
+
+  if (estado === 'Cancelada') {
+    try {
+      eliminarEventoCita(cita.calendarEventId, services);
+    } catch (e) {
+      registrarLog(services, user.codigo, user.rol, 'calendario_error', `cambiarEstadoCita ${citaId}: ${e.message}`);
+    }
+    sheet.getRange(cita._fila, 10, 1, 1).setValue('');
+  }
+
   return { ok: true };
 }
 

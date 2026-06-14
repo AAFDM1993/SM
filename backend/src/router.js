@@ -82,7 +82,7 @@ export function handlePost(e, services) {
 
     case 'cambiarEstadoCita':
       return json_(
-        requireAuthBody(b.token, ROLES_AGENDA, () => cambiarEstadoCita(b, services), services),
+        requireAuthBody(b.token, ROLES_AGENDA, (user) => cambiarEstadoCita(b, user, services), services),
         services
       );
 
