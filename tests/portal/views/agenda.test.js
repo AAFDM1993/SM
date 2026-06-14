@@ -30,6 +30,15 @@ const AGENDA_RESPONSE = {
   ],
 };
 
+const PACIENTES_RESPONSE = {
+  ok: true,
+  pacientes: [
+    { codigo: 'P001', nombre: 'Maria Garcia' },
+    { codigo: 'P002', nombre: 'Juan Lopez' },
+    { codigo: 'P003', nombre: 'Ana Ruiz' },
+  ],
+};
+
 // Reimplementacion local de las funciones de fecha para calcular el valor
 // esperado de "la semana actual" sin depender de mockear el reloj.
 function formatearFecha(date) {
@@ -69,7 +78,11 @@ describe('initAgendaView', () => {
     container = document.getElementById('main');
     setSession(ADMIN_SESSION);
     vi.stubGlobal('location', { href: '', search: '' });
-    apiGet.mockResolvedValue(AGENDA_RESPONSE);
+    apiGet.mockImplementation((accion) => {
+      if (accion === 'leerAgenda') return Promise.resolve(AGENDA_RESPONSE);
+      if (accion === 'listarPacientes') return Promise.resolve(PACIENTES_RESPONSE);
+      return Promise.resolve({ error: 'Accion no reconocida' });
+    });
     apiPost.mockReset();
     initAgendaHorarioView.mockClear();
   });
@@ -198,6 +211,122 @@ describe('initAgendaView', () => {
     apiGet.mockResolvedValue({ error: 'No autorizado' });
 
     initAgendaView(container, { session: ADMIN_SESSION, forced: false });
+    await flush();
+
+    expect(getSession()).toBeNull();
+    expect(window.location.href).toBe('/portal/?expired=1');
+  });
+
+  it('al hacer click en una celda disponible se abre el formulario Nueva cita', async () => {
+    initAgendaView(container, { session: ADMIN_SESSION, forced: false });
+    await flush();
+
+    const cell = container.querySelector('.view-agenda__cell--disponible[data-fecha="2026-06-15"][data-hora-inicio="09:45"]');
+    cell.click();
+    await flush();
+
+    expect(apiGet).toHaveBeenCalledWith('listarPacientes', { token: 'admin-tok' });
+
+    const panel = container.querySelector('.view-agenda__cita-panel');
+    expect(panel.hidden).toBe(false);
+    expect(panel.textContent).toContain('2026-06-15');
+    expect(panel.textContent).toContain('09:45 a 10:30');
+  });
+
+  it('el formulario Nueva cita filtra pacientes por nombre mientras se escribe', async () => {
+    initAgendaView(container, { session: ADMIN_SESSION, forced: false });
+    await flush();
+
+    const cell = container.querySelector('.view-agenda__cell--disponible[data-fecha="2026-06-15"][data-hora-inicio="09:45"]');
+    cell.click();
+    await flush();
+
+    const input = container.querySelector('.view-agenda__paciente-input');
+    input.value = 'gar';
+    input.dispatchEvent(new Event('input'));
+
+    const resultados = container.querySelectorAll('.view-agenda__paciente-resultados li');
+    expect(resultados.length).toBe(1);
+    expect(resultados[0].textContent).toBe('Maria Garcia');
+  });
+
+  it('Guardar llama a crearCita con fecha, horaInicio y pacienteCodigo, y recarga la cuadricula', async () => {
+    apiPost.mockResolvedValue({
+      ok: true,
+      cita: { id: 'c2', fecha: '2026-06-15', horaInicio: '09:45', horaFin: '10:30', pacienteCodigo: 'P001', pacienteNombre: 'Maria Garcia', estado: 'Programada' },
+    });
+
+    initAgendaView(container, { session: ADMIN_SESSION, forced: false });
+    await flush();
+
+    const cell = container.querySelector('.view-agenda__cell--disponible[data-fecha="2026-06-15"][data-hora-inicio="09:45"]');
+    cell.click();
+    await flush();
+
+    const input = container.querySelector('.view-agenda__paciente-input');
+    input.value = 'gar';
+    input.dispatchEvent(new Event('input'));
+    container.querySelector('.view-agenda__paciente-resultados li').click();
+
+    const apiGetCallsBefore = apiGet.mock.calls.length;
+    container.querySelector('.view-agenda__guardar-cita').click();
+    await flush();
+
+    expect(apiPost).toHaveBeenCalledWith({
+      accion: 'crearCita',
+      token: 'admin-tok',
+      fecha: '2026-06-15',
+      horaInicio: '09:45',
+      pacienteCodigo: 'P001',
+    });
+    expect(container.querySelector('.view-agenda__cita-panel').hidden).toBe(true);
+    expect(apiGet.mock.calls.length).toBe(apiGetCallsBefore + 1);
+  });
+
+  it('muestra un error inline si crearCita falla', async () => {
+    apiPost.mockResolvedValue({ error: 'Slot no disponible' });
+
+    initAgendaView(container, { session: ADMIN_SESSION, forced: false });
+    await flush();
+
+    const cell = container.querySelector('.view-agenda__cell--disponible[data-fecha="2026-06-15"][data-hora-inicio="09:45"]');
+    cell.click();
+    await flush();
+
+    container.querySelector('.view-agenda__guardar-cita').click();
+    await flush();
+
+    const errorEl = container.querySelector('.view-agenda__cita-error');
+    expect(errorEl.textContent).toBe('Slot no disponible');
+    expect(errorEl.hidden).toBe(false);
+  });
+
+  it('Cancelar cierra el formulario Nueva cita sin llamar a crearCita', async () => {
+    initAgendaView(container, { session: ADMIN_SESSION, forced: false });
+    await flush();
+
+    const cell = container.querySelector('.view-agenda__cell--disponible[data-fecha="2026-06-15"][data-hora-inicio="09:45"]');
+    cell.click();
+    await flush();
+
+    container.querySelector('.view-agenda__cancelar-cita').click();
+
+    expect(container.querySelector('.view-agenda__cita-panel').hidden).toBe(true);
+    expect(apiPost).not.toHaveBeenCalled();
+  });
+
+  it('redirige al login si listarPacientes devuelve No autorizado', async () => {
+    apiGet.mockImplementation((accion) => {
+      if (accion === 'leerAgenda') return Promise.resolve(AGENDA_RESPONSE);
+      if (accion === 'listarPacientes') return Promise.resolve({ error: 'No autorizado' });
+      return Promise.resolve({ error: 'Accion no reconocida' });
+    });
+
+    initAgendaView(container, { session: ADMIN_SESSION, forced: false });
+    await flush();
+
+    const cell = container.querySelector('.view-agenda__cell--disponible[data-fecha="2026-06-15"][data-hora-inicio="09:45"]');
+    cell.click();
     await flush();
 
     expect(getSession()).toBeNull();
