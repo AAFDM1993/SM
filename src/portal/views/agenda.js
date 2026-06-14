@@ -182,6 +182,7 @@ export function initAgendaView(container, ctx) {
           td.dataset.horaInicio = slot.horaInicio;
           td.dataset.horaFin = slot.horaFin;
           td.dataset.estadoCita = slot.estadoCita;
+          td.addEventListener('click', () => abrirDetalleCita(slot));
         } else if (slot.estado === 'bloqueado') {
           td.classList.add('view-agenda__cell--bloqueado');
         }
@@ -289,6 +290,64 @@ export function initAgendaView(container, ctx) {
       citaPanel.innerHTML = '';
       await loadAgenda();
     });
+  }
+
+  function abrirDetalleCita(slot) {
+    citaPanel.innerHTML = '';
+    citaPanel.hidden = false;
+
+    const heading = document.createElement('h3');
+    heading.textContent = 'Detalle de cita';
+    citaPanel.appendChild(heading);
+
+    const info = document.createElement('p');
+    info.textContent = `Paciente: ${slot.pacienteNombre} — Fecha: ${slot.fecha} — Horario: ${slot.horaInicio} a ${slot.horaFin} — Estado: ${slot.estadoCita}`;
+    citaPanel.appendChild(info);
+
+    const detalleError = document.createElement('div');
+    detalleError.className = 'view-agenda__detalle-error';
+    detalleError.hidden = true;
+    citaPanel.appendChild(detalleError);
+
+    async function handleCambiarEstado(estado) {
+      detalleError.hidden = true;
+      const result = await apiPost({ accion: 'cambiarEstadoCita', token: ctx.session.token, citaId: slot.citaId, estado });
+      if (result.error) {
+        if (handleAuthError(result)) return;
+        detalleError.textContent = result.error;
+        detalleError.hidden = false;
+        return;
+      }
+      citaPanel.hidden = true;
+      citaPanel.innerHTML = '';
+      await loadAgenda();
+    }
+
+    if (slot.estadoCita === 'Programada') {
+      const completarButton = document.createElement('button');
+      completarButton.type = 'button';
+      completarButton.className = 'button button--primary view-agenda__marcar-completada';
+      completarButton.textContent = 'Marcar completada';
+      completarButton.addEventListener('click', () => handleCambiarEstado('Completada'));
+      citaPanel.appendChild(completarButton);
+
+      const cancelarCitaButton = document.createElement('button');
+      cancelarCitaButton.type = 'button';
+      cancelarCitaButton.className = 'view-agenda__cancelar-cita-existente';
+      cancelarCitaButton.textContent = 'Cancelar';
+      cancelarCitaButton.addEventListener('click', () => handleCambiarEstado('Cancelada'));
+      citaPanel.appendChild(cancelarCitaButton);
+    }
+
+    const cerrarButton = document.createElement('button');
+    cerrarButton.type = 'button';
+    cerrarButton.className = 'view-agenda__cerrar-detalle';
+    cerrarButton.textContent = 'Cerrar';
+    cerrarButton.addEventListener('click', () => {
+      citaPanel.hidden = true;
+      citaPanel.innerHTML = '';
+    });
+    citaPanel.appendChild(cerrarButton);
   }
 
   loadAgenda();

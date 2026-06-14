@@ -332,4 +332,110 @@ describe('initAgendaView', () => {
     expect(getSession()).toBeNull();
     expect(window.location.href).toBe('/portal/?expired=1');
   });
+
+  it('al hacer click en una celda ocupada se abre el panel Detalle de cita con botones de accion', async () => {
+    initAgendaView(container, { session: ADMIN_SESSION, forced: false });
+    await flush();
+
+    const cell = container.querySelector('.view-agenda__cell--ocupado[data-fecha="2026-06-15"][data-hora-inicio="09:00"]');
+    cell.click();
+
+    const panel = container.querySelector('.view-agenda__cita-panel');
+    expect(panel.hidden).toBe(false);
+    expect(panel.textContent).toContain('M. Garcia');
+    expect(panel.textContent).toContain('2026-06-15');
+    expect(panel.textContent).toContain('09:00 a 09:45');
+    expect(panel.textContent).toContain('Programada');
+    expect(container.querySelector('.view-agenda__marcar-completada')).not.toBeNull();
+    expect(container.querySelector('.view-agenda__cancelar-cita-existente')).not.toBeNull();
+  });
+
+  it('Marcar completada llama a cambiarEstadoCita con estado Completada y recarga la cuadricula', async () => {
+    apiPost.mockResolvedValue({ ok: true });
+
+    initAgendaView(container, { session: ADMIN_SESSION, forced: false });
+    await flush();
+
+    const cell = container.querySelector('.view-agenda__cell--ocupado[data-fecha="2026-06-15"][data-hora-inicio="09:00"]');
+    cell.click();
+
+    const apiGetCallsBefore = apiGet.mock.calls.length;
+    container.querySelector('.view-agenda__marcar-completada').click();
+    await flush();
+
+    expect(apiPost).toHaveBeenCalledWith({ accion: 'cambiarEstadoCita', token: 'admin-tok', citaId: 'c1', estado: 'Completada' });
+    expect(container.querySelector('.view-agenda__cita-panel').hidden).toBe(true);
+    expect(apiGet.mock.calls.length).toBe(apiGetCallsBefore + 1);
+  });
+
+  it('el boton Cancelar del detalle llama a cambiarEstadoCita con estado Cancelada', async () => {
+    apiPost.mockResolvedValue({ ok: true });
+
+    initAgendaView(container, { session: ADMIN_SESSION, forced: false });
+    await flush();
+
+    const cell = container.querySelector('.view-agenda__cell--ocupado[data-fecha="2026-06-15"][data-hora-inicio="09:00"]');
+    cell.click();
+
+    container.querySelector('.view-agenda__cancelar-cita-existente').click();
+    await flush();
+
+    expect(apiPost).toHaveBeenCalledWith({ accion: 'cambiarEstadoCita', token: 'admin-tok', citaId: 'c1', estado: 'Cancelada' });
+  });
+
+  it('muestra un error inline si cambiarEstadoCita falla', async () => {
+    apiPost.mockResolvedValue({ error: 'Solo se puede cambiar el estado de una cita Programada' });
+
+    initAgendaView(container, { session: ADMIN_SESSION, forced: false });
+    await flush();
+
+    const cell = container.querySelector('.view-agenda__cell--ocupado[data-fecha="2026-06-15"][data-hora-inicio="09:00"]');
+    cell.click();
+
+    container.querySelector('.view-agenda__marcar-completada').click();
+    await flush();
+
+    const errorEl = container.querySelector('.view-agenda__detalle-error');
+    expect(errorEl.textContent).toBe('Solo se puede cambiar el estado de una cita Programada');
+    expect(errorEl.hidden).toBe(false);
+  });
+
+  it('una cita en estado Completada o Cancelada se muestra de solo lectura sin botones de accion', async () => {
+    const response = {
+      ...AGENDA_RESPONSE,
+      slots: AGENDA_RESPONSE.slots.map((s) =>
+        s.citaId === 'c1' ? { ...s, estadoCita: 'Completada' } : s
+      ),
+    };
+    apiGet.mockImplementation((accion) => {
+      if (accion === 'leerAgenda') return Promise.resolve(response);
+      if (accion === 'listarPacientes') return Promise.resolve(PACIENTES_RESPONSE);
+      return Promise.resolve({ error: 'Accion no reconocida' });
+    });
+
+    initAgendaView(container, { session: ADMIN_SESSION, forced: false });
+    await flush();
+
+    const cell = container.querySelector('.view-agenda__cell--ocupado[data-fecha="2026-06-15"][data-hora-inicio="09:00"]');
+    cell.click();
+
+    const panel = container.querySelector('.view-agenda__cita-panel');
+    expect(panel.hidden).toBe(false);
+    expect(panel.textContent).toContain('Completada');
+    expect(container.querySelector('.view-agenda__marcar-completada')).toBeNull();
+    expect(container.querySelector('.view-agenda__cancelar-cita-existente')).toBeNull();
+  });
+
+  it('Cerrar cierra el panel Detalle de cita sin llamar a cambiarEstadoCita', async () => {
+    initAgendaView(container, { session: ADMIN_SESSION, forced: false });
+    await flush();
+
+    const cell = container.querySelector('.view-agenda__cell--ocupado[data-fecha="2026-06-15"][data-hora-inicio="09:00"]');
+    cell.click();
+
+    container.querySelector('.view-agenda__cerrar-detalle').click();
+
+    expect(container.querySelector('.view-agenda__cita-panel').hidden).toBe(true);
+    expect(apiPost).not.toHaveBeenCalled();
+  });
 });
