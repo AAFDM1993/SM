@@ -4,29 +4,31 @@ import { initMobileMenu } from './nav.js';
 import { initInicioView } from './views/inicio.js';
 import { initUsuariosView } from './views/usuarios.js';
 import { initCambiarPasswordView } from './views/cambiar-password.js';
+import { initAgendaView } from './views/agenda.js';
+import { initMiAgendaView } from './views/mi-agenda.js';
 
 export const MENUS = {
   administrador: [
     { id: 'usuarios', label: 'Gestión de usuarios', enabled: true },
-    { id: 'agenda', label: 'Agenda', enabled: false },
+    { id: 'agenda', label: 'Agenda', enabled: true },
     { id: 'historia-clinica', label: 'Historia Clínica', enabled: false },
     { id: 'prescripciones', label: 'Prescripciones', enabled: false },
     { id: 'escalas', label: 'Escalas', enabled: false },
     { id: 'cambiar-password', label: 'Cambiar contraseña', enabled: true },
   ],
   psiquiatra: [
-    { id: 'agenda', label: 'Agenda', enabled: false },
+    { id: 'agenda', label: 'Agenda', enabled: true },
     { id: 'historia-clinica', label: 'Historia Clínica', enabled: false },
     { id: 'prescripciones', label: 'Prescripciones', enabled: false },
     { id: 'escalas', label: 'Escalas', enabled: false },
     { id: 'cambiar-password', label: 'Cambiar contraseña', enabled: true },
   ],
   recepcion: [
-    { id: 'agenda', label: 'Agenda', enabled: false },
+    { id: 'agenda', label: 'Agenda', enabled: true },
     { id: 'cambiar-password', label: 'Cambiar contraseña', enabled: true },
   ],
   usuario: [
-    { id: 'mi-agenda', label: 'Mi agenda', enabled: false },
+    { id: 'mi-agenda', label: 'Mi agenda', enabled: true },
     { id: 'mis-escalas', label: 'Mis escalas', enabled: false },
     { id: 'mis-actividades', label: 'Mis actividades', enabled: false },
     { id: 'cambiar-password', label: 'Cambiar contraseña', enabled: true },
@@ -37,6 +39,8 @@ export const VIEWS = {
   inicio: initInicioView,
   usuarios: initUsuariosView,
   'cambiar-password': initCambiarPasswordView,
+  agenda: initAgendaView,
+  'mi-agenda': initMiAgendaView,
 };
 
 export function initDashboard() {

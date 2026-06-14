@@ -4,10 +4,14 @@ import { setSession, getSession } from '../../src/portal/session.js';
 import { initInicioView } from '../../src/portal/views/inicio.js';
 import { initUsuariosView } from '../../src/portal/views/usuarios.js';
 import { initCambiarPasswordView } from '../../src/portal/views/cambiar-password.js';
+import { initAgendaView } from '../../src/portal/views/agenda.js';
+import { initMiAgendaView } from '../../src/portal/views/mi-agenda.js';
 
 vi.mock('../../src/portal/views/inicio.js', () => ({ initInicioView: vi.fn() }));
 vi.mock('../../src/portal/views/usuarios.js', () => ({ initUsuariosView: vi.fn() }));
 vi.mock('../../src/portal/views/cambiar-password.js', () => ({ initCambiarPasswordView: vi.fn() }));
+vi.mock('../../src/portal/views/agenda.js', () => ({ initAgendaView: vi.fn() }));
+vi.mock('../../src/portal/views/mi-agenda.js', () => ({ initMiAgendaView: vi.fn() }));
 
 function renderDashboardPage() {
   document.body.innerHTML = `
@@ -106,6 +110,31 @@ describe('initDashboard', () => {
 
     expect(initUsuariosView).toHaveBeenCalledWith(document.getElementById('dashboard-main'), {
       session: ADMIN_SESSION,
+      forced: false,
+    });
+  });
+
+  it('cambia a la vista agenda al hacer click en el item Agenda para administrador', () => {
+    setSession(ADMIN_SESSION);
+
+    initDashboard();
+    document.querySelector('#nav-menu .dashboard-nav__item[data-view="agenda"]').click();
+
+    expect(initAgendaView).toHaveBeenCalledWith(document.getElementById('dashboard-main'), {
+      session: ADMIN_SESSION,
+      forced: false,
+    });
+  });
+
+  it('cambia a la vista mi-agenda al hacer click en el item Mi agenda para usuario', () => {
+    const session = { token: 'tok', codigo: 'PAC001', rol: 'usuario', nombre: 'Paciente', debeCambiarPassword: false };
+    setSession(session);
+
+    initDashboard();
+    document.querySelector('#nav-menu .dashboard-nav__item[data-view="mi-agenda"]').click();
+
+    expect(initMiAgendaView).toHaveBeenCalledWith(document.getElementById('dashboard-main'), {
+      session,
       forced: false,
     });
   });
