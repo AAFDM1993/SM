@@ -293,12 +293,34 @@ describe('initAgendaView', () => {
     cell.click();
     await flush();
 
+    const input = container.querySelector('.view-agenda__paciente-input');
+    input.value = 'gar';
+    input.dispatchEvent(new Event('input'));
+    container.querySelector('.view-agenda__paciente-resultados li').click();
+
     container.querySelector('.view-agenda__guardar-cita').click();
     await flush();
 
     const errorEl = container.querySelector('.view-agenda__cita-error');
     expect(errorEl.textContent).toBe('Slot no disponible');
     expect(errorEl.hidden).toBe(false);
+  });
+
+  it('muestra un error inline si se intenta Guardar sin seleccionar un paciente', async () => {
+    initAgendaView(container, { session: ADMIN_SESSION, forced: false });
+    await flush();
+
+    const cell = container.querySelector('.view-agenda__cell--disponible[data-fecha="2026-06-15"][data-hora-inicio="09:45"]');
+    cell.click();
+    await flush();
+
+    container.querySelector('.view-agenda__guardar-cita').click();
+    await flush();
+
+    const errorEl = container.querySelector('.view-agenda__cita-error');
+    expect(errorEl.textContent).toBe('Selecciona un paciente de la lista');
+    expect(errorEl.hidden).toBe(false);
+    expect(apiPost).not.toHaveBeenCalled();
   });
 
   it('Cancelar cierra el formulario Nueva cita sin llamar a crearCita', async () => {
@@ -369,6 +391,7 @@ describe('initAgendaView', () => {
   });
 
   it('el boton Cancelar del detalle llama a cambiarEstadoCita con estado Cancelada', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
     apiPost.mockResolvedValue({ ok: true });
 
     initAgendaView(container, { session: ADMIN_SESSION, forced: false });
@@ -381,6 +404,22 @@ describe('initAgendaView', () => {
     await flush();
 
     expect(apiPost).toHaveBeenCalledWith({ accion: 'cambiarEstadoCita', token: 'admin-tok', citaId: 'c1', estado: 'Cancelada' });
+  });
+
+  it('el boton Cancelar del detalle no llama a cambiarEstadoCita si se cancela la confirmacion', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+    initAgendaView(container, { session: ADMIN_SESSION, forced: false });
+    await flush();
+
+    const cell = container.querySelector('.view-agenda__cell--ocupado[data-fecha="2026-06-15"][data-hora-inicio="09:00"]');
+    cell.click();
+
+    container.querySelector('.view-agenda__cancelar-cita-existente').click();
+    await flush();
+
+    expect(apiPost).not.toHaveBeenCalled();
+    expect(container.querySelector('.view-agenda__cita-panel').hidden).toBe(false);
   });
 
   it('muestra un error inline si cambiarEstadoCita falla', async () => {
@@ -437,5 +476,46 @@ describe('initAgendaView', () => {
 
     expect(container.querySelector('.view-agenda__cita-panel').hidden).toBe(true);
     expect(apiPost).not.toHaveBeenCalled();
+  });
+
+  it('navegar a la semana anterior cierra el panel de cita si esta abierto', async () => {
+    initAgendaView(container, { session: ADMIN_SESSION, forced: false });
+    await flush();
+
+    const cell = container.querySelector('.view-agenda__cell--ocupado[data-fecha="2026-06-15"][data-hora-inicio="09:00"]');
+    cell.click();
+    expect(container.querySelector('.view-agenda__cita-panel').hidden).toBe(false);
+
+    container.querySelector('.view-agenda__prev').click();
+    await flush();
+
+    expect(container.querySelector('.view-agenda__cita-panel').hidden).toBe(true);
+  });
+
+  it('navegar a la semana siguiente cierra el panel de cita si esta abierto', async () => {
+    initAgendaView(container, { session: ADMIN_SESSION, forced: false });
+    await flush();
+
+    const cell = container.querySelector('.view-agenda__cell--ocupado[data-fecha="2026-06-15"][data-hora-inicio="09:00"]');
+    cell.click();
+    expect(container.querySelector('.view-agenda__cita-panel').hidden).toBe(false);
+
+    container.querySelector('.view-agenda__next').click();
+    await flush();
+
+    expect(container.querySelector('.view-agenda__cita-panel').hidden).toBe(true);
+  });
+
+  it('el boton Configurar horario cierra el panel de cita si esta abierto', async () => {
+    initAgendaView(container, { session: ADMIN_SESSION, forced: false });
+    await flush();
+
+    const cell = container.querySelector('.view-agenda__cell--ocupado[data-fecha="2026-06-15"][data-hora-inicio="09:00"]');
+    cell.click();
+    expect(container.querySelector('.view-agenda__cita-panel').hidden).toBe(false);
+
+    container.querySelector('.view-agenda__configurar-horario').click();
+
+    expect(container.querySelector('.view-agenda__cita-panel').hidden).toBe(true);
   });
 });

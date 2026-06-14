@@ -52,6 +52,8 @@ export function initAgendaView(container, ctx) {
   prevButton.className = 'view-agenda__prev';
   prevButton.textContent = '‹';
   prevButton.addEventListener('click', () => {
+    citaPanel.hidden = true;
+    citaPanel.innerHTML = '';
     semanaInicio = sumarDias(semanaInicio, -7);
     loadAgenda();
   });
@@ -66,6 +68,8 @@ export function initAgendaView(container, ctx) {
   nextButton.className = 'view-agenda__next';
   nextButton.textContent = '›';
   nextButton.addEventListener('click', () => {
+    citaPanel.hidden = true;
+    citaPanel.innerHTML = '';
     semanaInicio = sumarDias(semanaInicio, 7);
     loadAgenda();
   });
@@ -76,6 +80,8 @@ export function initAgendaView(container, ctx) {
   configurarHorarioButton.className = 'button button--primary view-agenda__configurar-horario';
   configurarHorarioButton.textContent = 'Configurar horario';
   configurarHorarioButton.addEventListener('click', () => {
+    citaPanel.hidden = true;
+    citaPanel.innerHTML = '';
     panelContainer.hidden = false;
     panelContainer.innerHTML = '';
 
@@ -273,6 +279,11 @@ export function initAgendaView(container, ctx) {
 
     guardarButton.addEventListener('click', async () => {
       citaError.hidden = true;
+      if (!pacienteCodigoInput.value) {
+        citaError.textContent = 'Selecciona un paciente de la lista';
+        citaError.hidden = false;
+        return;
+      }
       const resultCita = await apiPost({
         accion: 'crearCita',
         token: ctx.session.token,
@@ -310,6 +321,7 @@ export function initAgendaView(container, ctx) {
     citaPanel.appendChild(detalleError);
 
     async function handleCambiarEstado(estado) {
+      if (estado === 'Cancelada' && !window.confirm('¿Cancelar esta cita?')) return;
       detalleError.hidden = true;
       const result = await apiPost({ accion: 'cambiarEstadoCita', token: ctx.session.token, citaId: slot.citaId, estado });
       if (result.error) {
