@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createMockServices } from '../mocks/gas-services.js';
-import { leerAgenda, crearCita, cambiarEstadoCita } from '../src/agenda.js';
+import { leerAgenda, crearCita, cambiarEstadoCita, leerMiAgenda, cancelarMiCita } from '../src/agenda.js';
 
 const HORARIO_HEADER = ['diaSemana', 'activo', 'horaInicio', 'horaFin', 'duracionSlotMin'];
 const BLOQUEOS_HEADER = ['id', 'fechaInicio', 'fechaFin', 'motivo', 'creadoPor', 'fechaCreacion'];
@@ -18,6 +18,7 @@ const HORARIO_LABORAL = [
 ];
 
 const USER_RECEPCION = { codigo: 'REC001', rol: 'recepcion' };
+const USER_PACIENTE = { codigo: 'PAC001', rol: 'usuario' };
 
 function buildServices({ horario = HORARIO_LABORAL, bloqueos = [], citas = [], usuarios = [] } = {}) {
   return createMockServices({
@@ -234,5 +235,81 @@ describe('cambiarEstadoCita', () => {
     });
     const result = cambiarEstadoCita({ citaId: 'c1', estado: 'Completada' }, services);
     expect(result).toEqual({ error: 'Solo se puede cambiar el estado de una cita Programada' });
+  });
+});
+
+describe('leerMiAgenda', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-17T10:00:00'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('separa las citas del paciente en proximas (hoy o futuras, Programada) e historial (pasadas o no Programada)', () => {
+    const services = buildServices({
+      citas: [
+        ['c1', '2026-06-15', '09:00', '09:45', 'PAC001', 'Programada', 'ADM001', new Date(), new Date()],
+        ['c2', '2026-06-18', '10:30', '11:15', 'PAC001', 'Programada', 'ADM001', new Date(), new Date()],
+        ['c3', '2026-06-16', '09:00', '09:45', 'PAC001', 'Cancelada', 'ADM001', new Date(), new Date()],
+        ['c4', '2026-06-19', '09:00', '09:45', 'PAC001', 'Completada', 'ADM001', new Date(), new Date()],
+        ['c5', '2026-06-20', '09:00', '09:45', 'PAC002', 'Programada', 'ADM001', new Date(), new Date()],
+        ['c6', '2026-06-17', '09:00', '09:45', 'PAC001', 'Programada', 'ADM001', new Date(), new Date()],
+      ],
+    });
+    const result = leerMiAgenda(USER_PACIENTE, services);
+    expect(result.ok).toBe(true);
+    expect(result.proximas).toEqual([
+      { id: 'c6', fecha: '2026-06-17', horaInicio: '09:00', horaFin: '09:45', estado: 'Programada' },
+      { id: 'c2', fecha: '2026-06-18', horaInicio: '10:30', horaFin: '11:15', estado: 'Programada' },
+    ]);
+    expect(result.historial).toEqual([
+      { id: 'c4', fecha: '2026-06-19', horaInicio: '09:00', horaFin: '09:45', estado: 'Completada' },
+      { id: 'c3', fecha: '2026-06-16', horaInicio: '09:00', horaFin: '09:45', estado: 'Cancelada' },
+      { id: 'c1', fecha: '2026-06-15', horaInicio: '09:00', horaFin: '09:45', estado: 'Programada' },
+    ]);
+  });
+
+  it('devuelve listas vacias cuando el paciente no tiene citas', () => {
+    const services = buildServices({});
+    const result = leerMiAgenda(USER_PACIENTE, services);
+    expect(result).toEqual({ ok: true, proximas: [], historial: [] });
+  });
+});
+
+describe('cancelarMiCita', () => {
+  it('cancela una cita Programada propia y libera el slot', () => {
+    const services = buildServices({
+      citas: [['c1', '2026-06-18', '09:00', '09:45', 'PAC001', 'Programada', 'ADM001', new Date(), new Date()]],
+    });
+    const result = cancelarMiCita({ citaId: 'c1' }, USER_PACIENTE, services);
+    expect(result).toEqual({ ok: true });
+
+    const agenda = leerAgenda('2026-06-18', '2026-06-18', services);
+    expect(agenda.slots[0].estado).toBe('disponible');
+  });
+
+  it('rechaza si la cita no existe', () => {
+    const services = buildServices({});
+    const result = cancelarMiCita({ citaId: 'no-existe' }, USER_PACIENTE, services);
+    expect(result).toEqual({ error: 'Cita no encontrada' });
+  });
+
+  it('rechaza si la cita pertenece a otro paciente', () => {
+    const services = buildServices({
+      citas: [['c1', '2026-06-18', '09:00', '09:45', 'PAC002', 'Programada', 'ADM001', new Date(), new Date()]],
+    });
+    const result = cancelarMiCita({ citaId: 'c1' }, USER_PACIENTE, services);
+    expect(result).toEqual({ error: 'No tienes permiso sobre esta cita' });
+  });
+
+  it('rechaza si la cita no esta Programada', () => {
+    const services = buildServices({
+      citas: [['c1', '2026-06-18', '09:00', '09:45', 'PAC001', 'Completada', 'ADM001', new Date(), new Date()]],
+    });
+    const result = cancelarMiCita({ citaId: 'c1' }, USER_PACIENTE, services);
+    expect(result).toEqual({ error: 'Solo se pueden cancelar citas Programadas' });
   });
 });

@@ -183,3 +183,48 @@ export function cambiarEstadoCita(b, services) {
   sheet.getRange(cita._fila, 9, 1, 1).setValue(new Date());
   return { ok: true };
 }
+
+function mapearCitaSimple(cita) {
+  return { id: cita.id, fecha: cita.fecha, horaInicio: cita.horaInicio, horaFin: cita.horaFin, estado: cita.estado };
+}
+
+export function leerMiAgenda(user, services) {
+  const hoy = formatearFecha(new Date());
+  const citas = leerCitasRaw(services).filter((c) => c.pacienteCodigo === user.codigo);
+  const proximas = citas
+    .filter((c) => c.estado === 'Programada' && c.fecha >= hoy)
+    .sort((a, b) => {
+      const ca = a.fecha + a.horaInicio;
+      const cb = b.fecha + b.horaInicio;
+      return ca < cb ? -1 : ca > cb ? 1 : 0;
+    })
+    .map(mapearCitaSimple);
+  const historial = citas
+    .filter((c) => c.estado !== 'Programada' || c.fecha < hoy)
+    .sort((a, b) => {
+      const ca = a.fecha + a.horaInicio;
+      const cb = b.fecha + b.horaInicio;
+      return ca < cb ? 1 : ca > cb ? -1 : 0;
+    })
+    .map(mapearCitaSimple);
+  return { ok: true, proximas, historial };
+}
+
+export function cancelarMiCita(b, user, services) {
+  const citaId = String(b.citaId || '');
+  const citas = leerCitasRaw(services);
+  const cita = citas.find((c) => c.id === citaId);
+  if (!cita) {
+    return { error: 'Cita no encontrada' };
+  }
+  if (cita.pacienteCodigo !== user.codigo) {
+    return { error: 'No tienes permiso sobre esta cita' };
+  }
+  if (cita.estado !== 'Programada') {
+    return { error: 'Solo se pueden cancelar citas Programadas' };
+  }
+  const sheet = services.SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_CITAS);
+  sheet.getRange(cita._fila, 6, 1, 1).setValue('Cancelada');
+  sheet.getRange(cita._fila, 9, 1, 1).setValue(new Date());
+  return { ok: true };
+}
