@@ -402,3 +402,41 @@ describe('cancelarMiCita', () => {
     expect(result).toEqual({ error: 'Solo se pueden cancelar citas Programadas' });
   });
 });
+
+describe('cancelarMiCita - integracion con Calendar', () => {
+  it('al cancelar, elimina el evento de Calendar y limpia calendarEventId', () => {
+    const services = buildServices({
+      citas: [['c1', '2026-06-18', '09:00', '09:45', 'PAC001', 'Programada', 'ADM001', new Date(), new Date(), '']],
+    });
+    const calendario = services.CalendarApp.createCalendar('Consultas SMPDJM');
+    const evento = calendario.createEvent('Consulta: M. Garcia', new Date('2026-06-18T09:00:00'), new Date('2026-06-18T09:45:00'), {});
+    services.SpreadsheetApp._sheets['_citas'][1][9] = evento.getId();
+
+    const result = cancelarMiCita({ citaId: 'c1' }, USER_PACIENTE, services);
+    expect(result).toEqual({ ok: true });
+
+    expect(calendario.getEventById(evento.getId())).toBeNull();
+    expect(services.SpreadsheetApp._sheets['_citas'][1][9]).toBe('');
+  });
+
+  it('si eliminar el evento falla, la cita igual queda Cancelada y se registra el error', () => {
+    const services = buildServices({
+      citas: [['c1', '2026-06-18', '09:00', '09:45', 'PAC001', 'Programada', 'ADM001', new Date(), new Date(), 'event-1']],
+    });
+    const calendario = services.CalendarApp.createCalendar('Consultas SMPDJM');
+    vi.spyOn(calendario, 'getEventById').mockImplementation(() => {
+      throw new Error('Calendar API error');
+    });
+
+    const result = cancelarMiCita({ citaId: 'c1' }, USER_PACIENTE, services);
+    expect(result).toEqual({ ok: true });
+
+    const agenda = leerAgenda('2026-06-18', '2026-06-18', services);
+    expect(agenda.slots[0].estado).toBe('disponible');
+
+    const logRows = services.SpreadsheetApp._sheets['_log'];
+    const logEntry = logRows.find((r) => r[3] === 'calendario_error');
+    expect(logEntry).toBeDefined();
+    expect(logEntry[4]).toMatch(/cancelarMiCita/);
+  });
+});

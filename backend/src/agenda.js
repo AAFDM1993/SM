@@ -249,5 +249,13 @@ export function cancelarMiCita(b, user, services) {
   const sheet = services.SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_CITAS);
   sheet.getRange(cita._fila, 6, 1, 1).setValue('Cancelada');
   sheet.getRange(cita._fila, 9, 1, 1).setValue(new Date());
+
+  try {
+    eliminarEventoCita(cita.calendarEventId, services);
+  } catch (e) {
+    registrarLog(services, user.codigo, user.rol, 'calendario_error', `cancelarMiCita ${citaId}: ${e.message}`);
+  }
+  sheet.getRange(cita._fila, 10, 1, 1).setValue('');
+
   return { ok: true };
 }
