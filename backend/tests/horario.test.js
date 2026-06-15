@@ -148,6 +148,18 @@ describe('crearBloqueo', () => {
     expect(leerBloqueos(services).bloqueos).toHaveLength(1);
   });
 
+  it('registra bloqueo_creado en _log', () => {
+    const services = buildServices({});
+    const result = crearBloqueo({ fechaInicio: '2026-07-01', fechaFin: '2026-07-15', motivo: 'Vacaciones' }, ADMIN, services);
+
+    const logRows = services.SpreadsheetApp._sheets['_log'];
+    const logEntry = logRows.find((r) => r[3] === 'bloqueo_creado');
+    expect(logEntry).toBeDefined();
+    expect(logEntry[1]).toBe('ADM001');
+    expect(logEntry[2]).toBe('administrador');
+    expect(logEntry[4]).toBe(`${result.bloqueo.id} 2026-07-01 a 2026-07-15`);
+  });
+
   it('rechaza si fechaInicio es posterior a fechaFin', () => {
     const services = buildServices({});
     const result = crearBloqueo({ fechaInicio: '2026-07-15', fechaFin: '2026-07-01', motivo: '' }, ADMIN, services);

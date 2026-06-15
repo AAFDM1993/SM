@@ -111,6 +111,8 @@ export function crearBloqueo(b, user, services) {
   const sheet = services.SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_BLOQUEOS);
   sheet.appendRow([id, fechaInicio, fechaFin, motivo, user.codigo, new Date()]);
 
+  registrarLog(services, user.codigo, user.rol, 'bloqueo_creado', `${id} ${fechaInicio} a ${fechaFin}`);
+
   return { ok: true, bloqueo: { id, fechaInicio, fechaFin, motivo } };
 }
 
