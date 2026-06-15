@@ -106,7 +106,7 @@ export function handlePost(e, services) {
 
     case 'eliminarBloqueo':
       return json_(
-        requireAuthBody(b.token, ROLES_HORARIO, () => eliminarBloqueo(b, services), services),
+        requireAuthBody(b.token, ROLES_HORARIO, (user) => eliminarBloqueo(b, user, services), services),
         services
       );
 

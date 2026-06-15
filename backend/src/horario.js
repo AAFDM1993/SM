@@ -116,7 +116,7 @@ export function crearBloqueo(b, user, services) {
   return { ok: true, bloqueo: { id, fechaInicio, fechaFin, motivo } };
 }
 
-export function eliminarBloqueo(b, services) {
+export function eliminarBloqueo(b, user, services) {
   const bloqueoId = String(b.bloqueoId || '');
   const sheet = services.SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_BLOQUEOS);
   if (!sheet) return { error: 'Bloqueo no encontrado' };
@@ -126,6 +126,7 @@ export function eliminarBloqueo(b, services) {
   for (let i = 0; i < ids.length; i++) {
     if (String(ids[i][0]) === bloqueoId) {
       sheet.deleteRow(i + 2);
+      registrarLog(services, user.codigo, user.rol, 'bloqueo_eliminado', bloqueoId);
       return { ok: true };
     }
   }

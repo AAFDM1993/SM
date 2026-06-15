@@ -205,12 +205,28 @@ describe('eliminarBloqueo', () => {
     const services = buildServices({
       bloqueos: [['b1', '2026-07-01', '2026-07-15', 'Vacaciones', 'ADM001', new Date()]],
     });
-    expect(eliminarBloqueo({ bloqueoId: 'b1' }, services)).toEqual({ ok: true });
+    expect(eliminarBloqueo({ bloqueoId: 'b1' }, ADMIN, services)).toEqual({ ok: true });
     expect(leerBloqueos(services).bloqueos).toHaveLength(0);
   });
 
   it('devuelve error si el bloqueo no existe', () => {
     const services = buildServices({});
-    expect(eliminarBloqueo({ bloqueoId: 'inexistente' }, services)).toEqual({ error: 'Bloqueo no encontrado' });
+    expect(eliminarBloqueo({ bloqueoId: 'inexistente' }, ADMIN, services)).toEqual({ error: 'Bloqueo no encontrado' });
+  });
+
+  it('registra bloqueo_eliminado en _log', () => {
+    const services = buildServices({
+      bloqueos: [['bloq-1', '2026-08-01', '2026-08-10', 'Vacaciones', 'ADM001', new Date()]],
+    });
+
+    const result = eliminarBloqueo({ bloqueoId: 'bloq-1' }, ADMIN, services);
+
+    expect(result).toEqual({ ok: true });
+    const logRows = services.SpreadsheetApp._sheets['_log'];
+    const logEntry = logRows.find((r) => r[3] === 'bloqueo_eliminado');
+    expect(logEntry).toBeDefined();
+    expect(logEntry[1]).toBe('ADM001');
+    expect(logEntry[2]).toBe('administrador');
+    expect(logEntry[4]).toBe('bloq-1');
   });
 });
