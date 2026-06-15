@@ -6,6 +6,7 @@ const HORARIO_HEADER = ['diaSemana', 'activo', 'horaInicio', 'horaFin', 'duracio
 const BLOQUEOS_HEADER = ['id', 'fechaInicio', 'fechaFin', 'motivo', 'creadoPor', 'fechaCreacion'];
 const CITAS_HEADER = ['id', 'fecha', 'horaInicio', 'horaFin', 'pacienteCodigo', 'estado', 'creadoPor', 'fechaCreacion', 'fechaActualizacion'];
 const USUARIOS_HEADER = ['codigo', 'password', 'salt', 'rol', 'nombre'];
+const LOG_HEADER = ['timestamp', 'codigo', 'rol', 'accion', 'detalle'];
 
 const HORARIO_LABORAL = [
   ['Lunes', true, '09:00', '18:00', 45],
@@ -24,6 +25,7 @@ function buildServices({ horario = [], bloqueos = [], citas = [], usuarios = [] 
       _bloqueos: [BLOQUEOS_HEADER, ...bloqueos],
       _citas: [CITAS_HEADER, ...citas],
       _usuarios: [USUARIOS_HEADER, ...usuarios],
+      _log: [LOG_HEADER],
     },
   });
 }
@@ -86,7 +88,7 @@ describe('actualizarHorarioConfig', () => {
     const horario = horarioValido();
     horario[0] = { ...horario[0], horaInicio: '10:00' };
 
-    expect(actualizarHorarioConfig({ horario }, services)).toEqual({ ok: true });
+    expect(actualizarHorarioConfig({ horario }, ADMIN, services)).toEqual({ ok: true });
     expect(leerHorarioConfig(services).horario[0]).toEqual({
       diaSemana: 'Lunes', activo: true, horaInicio: '10:00', horaFin: '18:00', duracionSlotMin: 45,
     });
@@ -95,28 +97,42 @@ describe('actualizarHorarioConfig', () => {
   it('rechaza si no se envian las 7 filas', () => {
     const services = buildServices({ horario: HORARIO_LABORAL });
     const horario = horarioValido().slice(0, 6);
-    expect(actualizarHorarioConfig({ horario }, services)).toEqual({ error: 'Se requieren las 7 filas de horario' });
+    expect(actualizarHorarioConfig({ horario }, ADMIN, services)).toEqual({ error: 'Se requieren las 7 filas de horario' });
   });
 
   it('rechaza si horaInicio >= horaFin en un dia activo', () => {
     const services = buildServices({ horario: HORARIO_LABORAL });
     const horario = horarioValido();
     horario[0] = { ...horario[0], horaInicio: '18:00', horaFin: '09:00' };
-    expect(actualizarHorarioConfig({ horario }, services)).toEqual({ error: 'horaInicio debe ser menor que horaFin (Lunes)' });
+    expect(actualizarHorarioConfig({ horario }, ADMIN, services)).toEqual({ error: 'horaInicio debe ser menor que horaFin (Lunes)' });
   });
 
   it('rechaza si duracionSlotMin no es mayor que 0 en un dia activo', () => {
     const services = buildServices({ horario: HORARIO_LABORAL });
     const horario = horarioValido();
     horario[1] = { ...horario[1], duracionSlotMin: 0 };
-    expect(actualizarHorarioConfig({ horario }, services)).toEqual({ error: 'duracionSlotMin debe ser mayor que 0 (Martes)' });
+    expect(actualizarHorarioConfig({ horario }, ADMIN, services)).toEqual({ error: 'duracionSlotMin debe ser mayor que 0 (Martes)' });
   });
 
   it('no valida horas ni duracion de un dia inactivo', () => {
     const services = buildServices({ horario: HORARIO_LABORAL });
     const horario = horarioValido();
     horario[5] = { ...horario[5], horaInicio: '18:00', horaFin: '09:00', duracionSlotMin: 0 };
-    expect(actualizarHorarioConfig({ horario }, services)).toEqual({ ok: true });
+    expect(actualizarHorarioConfig({ horario }, ADMIN, services)).toEqual({ ok: true });
+  });
+
+  it('registra horario_actualizado en _log', () => {
+    const services = buildServices({ horario: HORARIO_LABORAL });
+    const horario = horarioValido();
+
+    actualizarHorarioConfig({ horario }, ADMIN, services);
+
+    const logRows = services.SpreadsheetApp._sheets['_log'];
+    const logEntry = logRows.find((r) => r[3] === 'horario_actualizado');
+    expect(logEntry).toBeDefined();
+    expect(logEntry[1]).toBe('ADM001');
+    expect(logEntry[2]).toBe('administrador');
+    expect(logEntry[4]).toBe('');
   });
 });
 

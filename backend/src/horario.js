@@ -1,4 +1,5 @@
 import { findUser } from './usuarios.js';
+import { registrarLog } from './log.js';
 
 const SHEET_HORARIO_CONFIG = '_horario_config';
 const SHEET_BLOQUEOS = '_bloqueos';
@@ -40,7 +41,7 @@ export function leerBloqueos(services) {
   return { ok: true, bloqueos };
 }
 
-export function actualizarHorarioConfig(b, services) {
+export function actualizarHorarioConfig(b, user, services) {
   const horario = b && b.horario;
   if (!Array.isArray(horario) || horario.length !== 7) {
     return { error: 'Se requieren las 7 filas de horario' };
@@ -67,6 +68,9 @@ export function actualizarHorarioConfig(b, services) {
     Number(fila.duracionSlotMin),
   ]);
   sheet.getRange(2, 1, 7, 5).setValues(values);
+
+  registrarLog(services, user.codigo, user.rol, 'horario_actualizado', '');
+
   return { ok: true };
 }
 

@@ -94,7 +94,7 @@ export function handlePost(e, services) {
 
     case 'actualizarHorarioConfig':
       return json_(
-        requireAuthBody(b.token, ROLES_HORARIO, () => actualizarHorarioConfig(b, services), services),
+        requireAuthBody(b.token, ROLES_HORARIO, (user) => actualizarHorarioConfig(b, user, services), services),
         services
       );
 
