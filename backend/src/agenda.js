@@ -206,6 +206,8 @@ export function cambiarEstadoCita(b, user, services) {
     sheet.getRange(cita._fila, 10, 1, 1).setValue('');
   }
 
+  registrarLog(services, user.codigo, user.rol, estado === 'Cancelada' ? 'cita_cancelada' : 'cita_completada', citaId);
+
   return { ok: true };
 }
 

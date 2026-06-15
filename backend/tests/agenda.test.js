@@ -272,6 +272,34 @@ describe('cambiarEstadoCita', () => {
     expect(agenda.slots[0].estado).toBe('disponible');
   });
 
+  it('registra cita_completada en _log', () => {
+    const services = buildServices({
+      citas: [['c1', '2026-06-15', '09:00', '09:45', 'PAC001', 'Programada', 'ADM001', new Date(), new Date()]],
+    });
+    cambiarEstadoCita({ citaId: 'c1', estado: 'Completada' }, USER_RECEPCION, services);
+
+    const logRows = services.SpreadsheetApp._sheets['_log'];
+    const logEntry = logRows.find((r) => r[3] === 'cita_completada');
+    expect(logEntry).toBeDefined();
+    expect(logEntry[1]).toBe('REC001');
+    expect(logEntry[2]).toBe('recepcion');
+    expect(logEntry[4]).toBe('c1');
+  });
+
+  it('registra cita_cancelada en _log', () => {
+    const services = buildServices({
+      citas: [['c1', '2026-06-15', '09:00', '09:45', 'PAC001', 'Programada', 'ADM001', new Date(), new Date()]],
+    });
+    cambiarEstadoCita({ citaId: 'c1', estado: 'Cancelada' }, USER_RECEPCION, services);
+
+    const logRows = services.SpreadsheetApp._sheets['_log'];
+    const logEntry = logRows.find((r) => r[3] === 'cita_cancelada');
+    expect(logEntry).toBeDefined();
+    expect(logEntry[1]).toBe('REC001');
+    expect(logEntry[2]).toBe('recepcion');
+    expect(logEntry[4]).toBe('c1');
+  });
+
   it('rechaza un estado invalido', () => {
     const services = buildServices({
       citas: [['c1', '2026-06-15', '09:00', '09:45', 'PAC001', 'Programada', 'ADM001', new Date(), new Date()]],
