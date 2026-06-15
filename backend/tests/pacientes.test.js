@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createMockServices } from '../mocks/gas-services.js';
 import { generarHashSHA256 } from '../src/hash.js';
 import { findUser } from '../src/usuarios.js';
-import { crearPaciente } from '../src/pacientes.js';
+import { crearPaciente, actualizarPaciente } from '../src/pacientes.js';
 
 const USUARIOS_HEADER = ['codigo', 'password', 'salt', 'rol', 'nombre'];
 const PACIENTES_HEADER = ['codigo', 'fechaNacimiento', 'sexo', 'telefono', 'email', 'contactoEmergenciaNombre', 'contactoEmergenciaTelefono', 'fechaAlta', 'creadoPor'];
@@ -97,5 +97,88 @@ describe('crearPaciente', () => {
     expect(logEntry[1]).toBe('ADM001');
     expect(logEntry[2]).toBe('administrador');
     expect(logEntry[4]).toBe('45678912 Maria Lopez');
+  });
+});
+
+describe('actualizarPaciente', () => {
+  it('actualiza ficha y nombre de un paciente existente', () => {
+    const services = buildServices({
+      usuarios: [['45678912', 'h', 's', 'usuario', 'Maria Lopez']],
+      pacientes: [['45678912', '1990-05-10', 'Femenino', '987654321', 'maria@example.com', 'Juan Lopez', '999888777', new Date(), 'ADM001']],
+    });
+
+    const result = actualizarPaciente({
+      codigo: '45678912',
+      nombre: 'Maria Lopez Garcia',
+      fechaNacimiento: '1990-05-11',
+      sexo: 'Femenino',
+      telefono: '111222333',
+      email: 'maria2@example.com',
+      contactoEmergenciaNombre: 'Pedro Lopez',
+      contactoEmergenciaTelefono: '444555666',
+    }, ADMIN, services);
+
+    expect(result).toEqual({ ok: true });
+    expect(findUser('45678912', services).nombre).toBe('Maria Lopez Garcia');
+
+    const pacienteRow = services.SpreadsheetApp._sheets['_pacientes'][1];
+    expect(pacienteRow[1]).toBe('1990-05-11');
+    expect(pacienteRow[3]).toBe('111222333');
+    expect(pacienteRow[4]).toBe('maria2@example.com');
+    expect(pacienteRow[5]).toBe('Pedro Lopez');
+    expect(pacienteRow[6]).toBe('444555666');
+  });
+
+  it('hace upsert para un paciente legacy sin fila en _pacientes', () => {
+    const services = buildServices({
+      usuarios: [['78945612', 'h', 's', 'usuario', 'Carlos Ruiz']],
+    });
+
+    const result = actualizarPaciente({ codigo: '78945612', nombre: 'Carlos Ruiz', telefono: '912345678' }, ADMIN, services);
+
+    expect(result).toEqual({ ok: true });
+    const pacienteRow = services.SpreadsheetApp._sheets['_pacientes'][1];
+    expect(pacienteRow[0]).toBe('78945612');
+    expect(pacienteRow[3]).toBe('912345678');
+    expect(pacienteRow[8]).toBe('ADM001');
+  });
+
+  it('rechaza un codigo que no existe en _usuarios', () => {
+    const services = buildServices();
+    const result = actualizarPaciente({ codigo: 'NOPE', nombre: 'Alguien' }, ADMIN, services);
+    expect(result).toEqual({ error: 'Paciente no encontrado' });
+  });
+
+  it('rechaza un codigo que existe pero no tiene rol usuario', () => {
+    const services = buildServices({ usuarios: [['ADM002', 'h', 's', 'administrador', 'Otro Admin']] });
+    const result = actualizarPaciente({ codigo: 'ADM002', nombre: 'Otro Admin' }, ADMIN, services);
+    expect(result).toEqual({ error: 'Paciente no encontrado' });
+  });
+
+  it('rechaza nombre vacio', () => {
+    const services = buildServices({ usuarios: [['45678912', 'h', 's', 'usuario', 'Maria Lopez']] });
+    const result = actualizarPaciente({ codigo: '45678912', nombre: '' }, ADMIN, services);
+    expect(result).toEqual({ error: 'codigo y nombre son requeridos' });
+  });
+
+  it('rechaza si falta la hoja _pacientes', () => {
+    const services = createMockServices({
+      sheets: { _usuarios: [USUARIOS_HEADER, ['45678912', 'h', 's', 'usuario', 'Maria Lopez']], _log: [LOG_HEADER] },
+    });
+    const result = actualizarPaciente({ codigo: '45678912', nombre: 'Maria Lopez' }, ADMIN, services);
+    expect(result).toEqual({ error: 'Hoja de pacientes no encontrada' });
+  });
+
+  it('registra paciente_actualizado en _log', () => {
+    const services = buildServices({ usuarios: [['45678912', 'h', 's', 'usuario', 'Maria Lopez']] });
+
+    actualizarPaciente({ codigo: '45678912', nombre: 'Maria Lopez' }, ADMIN, services);
+
+    const logRows = services.SpreadsheetApp._sheets['_log'];
+    const logEntry = logRows.find((r) => r[3] === 'paciente_actualizado');
+    expect(logEntry).toBeDefined();
+    expect(logEntry[1]).toBe('ADM001');
+    expect(logEntry[2]).toBe('administrador');
+    expect(logEntry[4]).toBe('45678912');
   });
 });
