@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createMockServices } from '../mocks/gas-services.js';
 import { generarHashSHA256 } from '../src/hash.js';
 import { findUser } from '../src/usuarios.js';
-import { crearPaciente, actualizarPaciente } from '../src/pacientes.js';
+import { crearPaciente, actualizarPaciente, leerFichaPaciente, listarFichasPacientes } from '../src/pacientes.js';
 
 const USUARIOS_HEADER = ['codigo', 'password', 'salt', 'rol', 'nombre'];
 const PACIENTES_HEADER = ['codigo', 'fechaNacimiento', 'sexo', 'telefono', 'email', 'contactoEmergenciaNombre', 'contactoEmergenciaTelefono', 'fechaAlta', 'creadoPor'];
@@ -180,5 +180,86 @@ describe('actualizarPaciente', () => {
     expect(logEntry[1]).toBe('ADM001');
     expect(logEntry[2]).toBe('administrador');
     expect(logEntry[4]).toBe('45678912');
+  });
+});
+
+describe('leerFichaPaciente', () => {
+  it('devuelve la ficha completa para un paciente con fila en _pacientes', () => {
+    const services = buildServices({
+      usuarios: [['45678912', 'h', 's', 'usuario', 'Maria Lopez']],
+      pacientes: [['45678912', '1990-05-10', 'Femenino', '987654321', 'maria@example.com', 'Juan Lopez', '999888777', new Date(), 'ADM001']],
+    });
+
+    expect(leerFichaPaciente('45678912', services)).toEqual({
+      ok: true,
+      paciente: {
+        codigo: '45678912',
+        nombre: 'Maria Lopez',
+        fechaNacimiento: '1990-05-10',
+        sexo: 'Femenino',
+        telefono: '987654321',
+        email: 'maria@example.com',
+        contactoEmergenciaNombre: 'Juan Lopez',
+        contactoEmergenciaTelefono: '999888777',
+      },
+    });
+  });
+
+  it('devuelve campos de ficha vacios para un paciente legacy sin fila en _pacientes', () => {
+    const services = buildServices({ usuarios: [['78945612', 'h', 's', 'usuario', 'Carlos Ruiz']] });
+
+    expect(leerFichaPaciente('78945612', services)).toEqual({
+      ok: true,
+      paciente: {
+        codigo: '78945612',
+        nombre: 'Carlos Ruiz',
+        fechaNacimiento: '',
+        sexo: '',
+        telefono: '',
+        email: '',
+        contactoEmergenciaNombre: '',
+        contactoEmergenciaTelefono: '',
+      },
+    });
+  });
+
+  it('devuelve error si el codigo no existe como paciente', () => {
+    const services = buildServices();
+    expect(leerFichaPaciente('NOPE', services)).toEqual({ error: 'Paciente no encontrado' });
+  });
+
+  it('rechaza si falta la hoja _pacientes', () => {
+    const services = createMockServices({
+      sheets: { _usuarios: [USUARIOS_HEADER, ['45678912', 'h', 's', 'usuario', 'Maria Lopez']], _log: [LOG_HEADER] },
+    });
+    expect(leerFichaPaciente('45678912', services)).toEqual({ error: 'Hoja de pacientes no encontrada' });
+  });
+});
+
+describe('listarFichasPacientes', () => {
+  it('devuelve la lista de pacientes enriquecida con telefono y email', () => {
+    const services = buildServices({
+      usuarios: [
+        ['ADM001', 'h', 's', 'administrador', 'Admin'],
+        ['45678912', 'h', 's', 'usuario', 'Maria Lopez'],
+        ['78945612', 'h', 's', 'usuario', 'Carlos Ruiz'],
+      ],
+      pacientes: [
+        ['45678912', '1990-05-10', 'Femenino', '987654321', 'maria@example.com', 'Juan Lopez', '999888777', new Date(), 'ADM001'],
+      ],
+    });
+
+    expect(listarFichasPacientes(services)).toEqual({
+      ok: true,
+      pacientes: [
+        { codigo: '45678912', nombre: 'Maria Lopez', telefono: '987654321', email: 'maria@example.com' },
+        { codigo: '78945612', nombre: 'Carlos Ruiz', telefono: '', email: '' },
+      ],
+    });
+  });
+
+  it('rechaza si falta la hoja _pacientes', () => {
+    const services = createMockServices({ sheets: { _usuarios: [USUARIOS_HEADER], _log: [LOG_HEADER] } });
+    expect(listarFichasPacientes(services)).toEqual({ error: 'Hoja de pacientes no encontrada' });
   });
 });

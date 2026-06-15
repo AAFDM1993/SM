@@ -108,3 +108,56 @@ export function actualizarPaciente(b, user, services) {
 
   return { ok: true };
 }
+
+export function leerFichaPaciente(codigo, services) {
+  const usuarioRow = findUsuarioRow(codigo, services);
+  if (!usuarioRow || String(usuarioRow.row[3]).trim().toLowerCase() !== 'usuario') {
+    return { error: 'Paciente no encontrado' };
+  }
+
+  const sheetPacientes = services.SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_PACIENTES);
+  if (!sheetPacientes) return { error: 'Hoja de pacientes no encontrada' };
+
+  const codigoNormalizado = String(usuarioRow.row[0]).trim();
+  const nombre = String(usuarioRow.row[4]);
+  const pacienteRow = findPacienteRow(codigoNormalizado, sheetPacientes);
+  const ficha = pacienteRow ? pacienteRow.row : ['', '', '', '', '', '', '', '', ''];
+
+  return {
+    ok: true,
+    paciente: {
+      codigo: codigoNormalizado,
+      nombre,
+      fechaNacimiento: String(ficha[1]),
+      sexo: String(ficha[2]),
+      telefono: String(ficha[3]),
+      email: String(ficha[4]),
+      contactoEmergenciaNombre: String(ficha[5]),
+      contactoEmergenciaTelefono: String(ficha[6]),
+    },
+  };
+}
+
+export function listarFichasPacientes(services) {
+  const sheetPacientes = services.SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_PACIENTES);
+  if (!sheetPacientes) return { error: 'Hoja de pacientes no encontrada' };
+
+  const sheetUsuarios = services.SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_USUARIOS);
+  const last = sheetUsuarios.getLastRow();
+  const usuarios = last < 2 ? [] : sheetUsuarios.getRange(2, 1, last - 1, 5).getValues();
+
+  const pacientes = usuarios
+    .filter((r) => String(r[0]).trim() !== '' && String(r[3]).trim().toLowerCase() === 'usuario')
+    .map((r) => {
+      const codigo = String(r[0]).trim();
+      const pacienteRow = findPacienteRow(codigo, sheetPacientes);
+      return {
+        codigo,
+        nombre: String(r[4]),
+        telefono: pacienteRow ? String(pacienteRow.row[3]) : '',
+        email: pacienteRow ? String(pacienteRow.row[4]) : '',
+      };
+    });
+
+  return { ok: true, pacientes };
+}
