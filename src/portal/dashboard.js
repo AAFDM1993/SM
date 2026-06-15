@@ -7,13 +7,13 @@ import { initCambiarPasswordView } from './views/cambiar-password.js';
 import { initAgendaView } from './views/agenda.js';
 import { initMiAgendaView } from './views/mi-agenda.js';
 import { initPacientesView } from './views/pacientes.js';
+import { initHistoriaClinicaView } from './views/historia-clinica.js';
 
 export const MENUS = {
   administrador: [
     { id: 'usuarios', label: 'Gestión de usuarios', enabled: true },
     { id: 'agenda', label: 'Agenda', enabled: true },
     { id: 'pacientes', label: 'Pacientes', enabled: true },
-    { id: 'historia-clinica', label: 'Historia Clínica', enabled: false },
     { id: 'prescripciones', label: 'Prescripciones', enabled: false },
     { id: 'escalas', label: 'Escalas', enabled: false },
     { id: 'cambiar-password', label: 'Cambiar contraseña', enabled: true },
@@ -21,7 +21,7 @@ export const MENUS = {
   psiquiatra: [
     { id: 'agenda', label: 'Agenda', enabled: true },
     { id: 'pacientes', label: 'Pacientes', enabled: true },
-    { id: 'historia-clinica', label: 'Historia Clínica', enabled: false },
+    { id: 'historia-clinica', label: 'Historia Clínica', enabled: true },
     { id: 'prescripciones', label: 'Prescripciones', enabled: false },
     { id: 'escalas', label: 'Escalas', enabled: false },
     { id: 'cambiar-password', label: 'Cambiar contraseña', enabled: true },
@@ -46,6 +46,7 @@ export const VIEWS = {
   agenda: initAgendaView,
   'mi-agenda': initMiAgendaView,
   pacientes: initPacientesView,
+  'historia-clinica': initHistoriaClinicaView,
 };
 
 export function initDashboard() {

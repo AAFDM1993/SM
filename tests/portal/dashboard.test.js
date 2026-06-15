@@ -7,6 +7,7 @@ import { initCambiarPasswordView } from '../../src/portal/views/cambiar-password
 import { initAgendaView } from '../../src/portal/views/agenda.js';
 import { initMiAgendaView } from '../../src/portal/views/mi-agenda.js';
 import { initPacientesView } from '../../src/portal/views/pacientes.js';
+import { initHistoriaClinicaView } from '../../src/portal/views/historia-clinica.js';
 
 vi.mock('../../src/portal/views/inicio.js', () => ({ initInicioView: vi.fn() }));
 vi.mock('../../src/portal/views/usuarios.js', () => ({ initUsuariosView: vi.fn() }));
@@ -14,6 +15,7 @@ vi.mock('../../src/portal/views/cambiar-password.js', () => ({ initCambiarPasswo
 vi.mock('../../src/portal/views/agenda.js', () => ({ initAgendaView: vi.fn() }));
 vi.mock('../../src/portal/views/mi-agenda.js', () => ({ initMiAgendaView: vi.fn() }));
 vi.mock('../../src/portal/views/pacientes.js', () => ({ initPacientesView: vi.fn() }));
+vi.mock('../../src/portal/views/historia-clinica.js', () => ({ initHistoriaClinicaView: vi.fn() }));
 
 function renderDashboardPage() {
   document.body.innerHTML = `
@@ -172,6 +174,19 @@ describe('initDashboard', () => {
       } else {
         expect(item.disabled).toBe(true);
       }
+    });
+  });
+
+  it('cambia a la vista historia-clinica al hacer click en el item Historia Clínica para psiquiatra', () => {
+    const session = { token: 'tok', codigo: 'PSI001', rol: 'psiquiatra', nombre: 'Dra. Petra', debeCambiarPassword: false };
+    setSession(session);
+
+    initDashboard();
+    document.querySelector('#nav-menu .dashboard-nav__item[data-view="historia-clinica"]').click();
+
+    expect(initHistoriaClinicaView).toHaveBeenCalledWith(document.getElementById('dashboard-main'), {
+      session,
+      forced: false,
     });
   });
 });
