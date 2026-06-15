@@ -171,6 +171,8 @@ export function crearCita(b, user, services) {
   const sheet = services.SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_CITAS);
   sheet.appendRow([id, fecha, horaInicio, horaFin, pacienteCodigo, 'Programada', user.codigo, ahora, ahora, calendarEventId]);
 
+  registrarLog(services, user.codigo, user.rol, 'cita_creada', `${id} paciente=${pacienteCodigo} ${fecha} ${horaInicio}`);
+
   return {
     ok: true,
     cita: { id, fecha, horaInicio, horaFin, pacienteCodigo, pacienteNombre: paciente.nombre, estado: 'Programada' },

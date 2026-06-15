@@ -192,6 +192,21 @@ describe('crearCita', () => {
     const result = crearCita({ fecha: '2026-06-15', horaInicio: '09:00', pacienteCodigo: 'PAC002' }, USER_RECEPCION, services);
     expect(result.ok).toBe(true);
   });
+
+  it('registra cita_creada en _log', () => {
+    const services = buildServices({
+      usuarios: [['PAC001', 'h', 's', 'usuario', 'M. Garcia']],
+    });
+    const result = crearCita({ fecha: '2026-06-15', horaInicio: '09:00', pacienteCodigo: 'PAC001' }, USER_RECEPCION, services);
+    expect(result.ok).toBe(true);
+
+    const logRows = services.SpreadsheetApp._sheets['_log'];
+    const logEntry = logRows.find((r) => r[3] === 'cita_creada');
+    expect(logEntry).toBeDefined();
+    expect(logEntry[1]).toBe('REC001');
+    expect(logEntry[2]).toBe('recepcion');
+    expect(logEntry[4]).toBe(`${result.cita.id} paciente=PAC001 2026-06-15 09:00`);
+  });
 });
 
 describe('crearCita - integracion con Calendar', () => {
