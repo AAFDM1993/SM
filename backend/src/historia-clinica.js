@@ -3,6 +3,7 @@ import { findUser } from './usuarios.js';
 import { registrarLog } from './log.js';
 
 const SHEET_ANTECEDENTES = '_antecedentes';
+const SHEET_NOTAS = '_notas_evolucion';
 
 function findAntecedentesRow(codigo, sheet) {
   const last = sheet.getLastRow();
@@ -86,4 +87,70 @@ export function actualizarAntecedentes(b, user, services) {
   registrarLog(services, user.codigo, user.rol, 'antecedentes_actualizados', usuario.codigo);
 
   return { ok: true };
+}
+
+export function crearNotaEvolucion(b, user, services) {
+  const codigo = String(b.codigo || '').trim();
+  const fecha = String(b.fecha || '').trim();
+  const notas = String(b.notas || '').trim();
+  if (!codigo || !fecha || !notas) return { error: 'codigo, fecha y notas son requeridos' };
+
+  const usuario = validarPaciente(codigo, services);
+  if (!usuario) return { error: 'Paciente no encontrado' };
+
+  const sheet = services.SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NOTAS);
+  if (!sheet) return { error: 'Hoja de notas de evolución no encontrada' };
+
+  const motivoConsulta = String(b.motivoConsulta || '').trim();
+  const diagnostico = String(b.diagnostico || '').trim();
+
+  const id = services.Utilities.getUuid();
+  const fechaCreacion = new Date();
+
+  sheet.appendRow([
+    id,
+    usuario.codigo,
+    fecha,
+    encrypt_(motivoConsulta, services),
+    encrypt_(notas, services),
+    encrypt_(diagnostico, services),
+    user.codigo,
+    fechaCreacion,
+  ]);
+
+  registrarLog(services, user.codigo, user.rol, 'nota_evolucion_creada', `${id} paciente=${usuario.codigo} ${fecha}`);
+
+  return {
+    ok: true,
+    nota: { id, pacienteCodigo: usuario.codigo, fecha, motivoConsulta, notas, diagnostico, creadoPor: user.codigo, fechaCreacion },
+  };
+}
+
+export function listarNotasEvolucion(codigo, services) {
+  const usuario = validarPaciente(codigo, services);
+  if (!usuario) return { error: 'Paciente no encontrado' };
+
+  const sheet = services.SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NOTAS);
+  if (!sheet) return { error: 'Hoja de notas de evolución no encontrada' };
+
+  const last = sheet.getLastRow();
+  const rows = last < 2 ? [] : sheet.getRange(2, 1, last - 1, 8).getValues();
+
+  const notas = rows
+    .filter((row) => String(row[1]).trim().toLowerCase() === usuario.codigo.toLowerCase())
+    .map((row) => ({
+      id: String(row[0]),
+      fecha: String(row[2]),
+      motivoConsulta: decrypt_(row[3], services),
+      notas: decrypt_(row[4], services),
+      diagnostico: decrypt_(row[5], services),
+      creadoPor: String(row[6]),
+      fechaCreacion: row[7],
+    }))
+    .sort((a, b) => {
+      if (a.fecha !== b.fecha) return a.fecha < b.fecha ? 1 : -1;
+      return new Date(b.fechaCreacion).getTime() - new Date(a.fechaCreacion).getTime();
+    });
+
+  return { ok: true, notas };
 }
