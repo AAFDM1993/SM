@@ -9,6 +9,9 @@ const HORARIO_HEADER = ['diaSemana', 'activo', 'horaInicio', 'horaFin', 'duracio
 const BLOQUEOS_HEADER = ['id', 'fechaInicio', 'fechaFin', 'motivo', 'creadoPor', 'fechaCreacion'];
 const CITAS_HEADER = ['id', 'fecha', 'horaInicio', 'horaFin', 'pacienteCodigo', 'estado', 'creadoPor', 'fechaCreacion', 'fechaActualizacion'];
 const PACIENTES_HEADER = ['codigo', 'fechaNacimiento', 'sexo', 'telefono', 'email', 'contactoEmergenciaNombre', 'contactoEmergenciaTelefono', 'fechaAlta', 'creadoPor'];
+const ANTECEDENTES_HEADER = ['codigo', 'antecedentesPersonales', 'antecedentesPsiquiatricos', 'antecedentesFamiliares', 'alergias', 'medicacionActual', 'fechaActualizacion', 'actualizadoPor'];
+const NOTAS_HEADER = ['id', 'pacienteCodigo', 'fecha', 'motivoConsulta', 'notas', 'diagnostico', 'creadoPor', 'fechaCreacion'];
+const AES_KEY = '000102030405060708090a0b0c0d0e0f';
 
 const HORARIO_LABORAL = [
   ['Lunes', true, '09:00', '18:00', 45],
@@ -217,6 +220,60 @@ describe('handleGet', () => {
 
     const result = handleGet({ parameter: { accion: 'listarFichasPacientes', token } }, services);
     expect(bodyOf(result)).toEqual({ ok: true, pacientes: [{ codigo: '45678912', nombre: 'Maria Lopez', telefono: '', email: '' }] });
+  });
+
+  it('leerAntecedentes requiere rol psiquiatra', () => {
+    const services = buildServicesWithUser({
+      codigo: 'ADM001', password: 'secreta123', rol: 'administrador', nombre: 'Admin',
+      extraSheets: { _antecedentes: [ANTECEDENTES_HEADER] },
+    });
+    services.SpreadsheetApp._sheets['_usuarios'].push(['45678912', 'hash', 'salt', 'usuario', 'Maria Lopez']);
+    const token = loginToken(services, 'ADM001', 'secreta123');
+
+    const result = handleGet({ parameter: { accion: 'leerAntecedentes', token, codigo: '45678912' } }, services);
+    expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
+  });
+
+  it('leerAntecedentes devuelve los antecedentes para psiquiatra', () => {
+    const services = buildServicesWithUser({
+      codigo: 'PSI001', password: 'secreta123', rol: 'psiquiatra', nombre: 'Dra. Petra',
+      extraSheets: { _antecedentes: [ANTECEDENTES_HEADER] },
+    });
+    services.SpreadsheetApp._sheets['_usuarios'].push(['45678912', 'hash', 'salt', 'usuario', 'Maria Lopez']);
+    const token = loginToken(services, 'PSI001', 'secreta123');
+
+    const result = handleGet({ parameter: { accion: 'leerAntecedentes', token, codigo: '45678912' } }, services);
+    expect(bodyOf(result)).toEqual({
+      ok: true,
+      antecedentes: {
+        codigo: '45678912', antecedentesPersonales: '', antecedentesPsiquiatricos: '',
+        antecedentesFamiliares: '', alergias: '', medicacionActual: '', fechaActualizacion: '',
+      },
+    });
+  });
+
+  it('listarNotasEvolucion requiere rol psiquiatra', () => {
+    const services = buildServicesWithUser({
+      codigo: 'ADM001', password: 'secreta123', rol: 'administrador', nombre: 'Admin',
+      extraSheets: { _notas_evolucion: [NOTAS_HEADER] },
+    });
+    services.SpreadsheetApp._sheets['_usuarios'].push(['45678912', 'hash', 'salt', 'usuario', 'Maria Lopez']);
+    const token = loginToken(services, 'ADM001', 'secreta123');
+
+    const result = handleGet({ parameter: { accion: 'listarNotasEvolucion', token, codigo: '45678912' } }, services);
+    expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
+  });
+
+  it('listarNotasEvolucion devuelve las notas para psiquiatra', () => {
+    const services = buildServicesWithUser({
+      codigo: 'PSI001', password: 'secreta123', rol: 'psiquiatra', nombre: 'Dra. Petra',
+      extraSheets: { _notas_evolucion: [NOTAS_HEADER] },
+    });
+    services.SpreadsheetApp._sheets['_usuarios'].push(['45678912', 'hash', 'salt', 'usuario', 'Maria Lopez']);
+    const token = loginToken(services, 'PSI001', 'secreta123');
+
+    const result = handleGet({ parameter: { accion: 'listarNotasEvolucion', token, codigo: '45678912' } }, services);
+    expect(bodyOf(result)).toEqual({ ok: true, notas: [] });
   });
 });
 
@@ -506,5 +563,72 @@ describe('handlePost', () => {
       services
     );
     expect(bodyOf(result)).toEqual({ ok: true });
+  });
+
+  it('actualizarAntecedentes requiere rol psiquiatra', () => {
+    const services = buildServicesWithUser({
+      codigo: 'ADM001', password: 'secreta123', rol: 'administrador', nombre: 'Admin',
+      extraSheets: { _antecedentes: [ANTECEDENTES_HEADER] },
+    });
+    services.SpreadsheetApp._sheets['_usuarios'].push(['45678912', 'hash', 'salt', 'usuario', 'Maria Lopez']);
+    const token = loginToken(services, 'ADM001', 'secreta123');
+
+    const result = handlePost(
+      { postData: { contents: JSON.stringify({ accion: 'actualizarAntecedentes', token, codigo: '45678912' }) } },
+      services
+    );
+    expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
+  });
+
+  it('actualizarAntecedentes actualiza los antecedentes para psiquiatra', () => {
+    const services = buildServicesWithUser({
+      codigo: 'PSI001', password: 'secreta123', rol: 'psiquiatra', nombre: 'Dra. Petra',
+      extraSheets: { _antecedentes: [ANTECEDENTES_HEADER] },
+    });
+    services.SpreadsheetApp._sheets['_usuarios'].push(['45678912', 'hash', 'salt', 'usuario', 'Maria Lopez']);
+    services.PropertiesService.getScriptProperties().setProperty('AES_KEY', AES_KEY);
+    const token = loginToken(services, 'PSI001', 'secreta123');
+
+    const result = handlePost(
+      { postData: { contents: JSON.stringify({
+        accion: 'actualizarAntecedentes', token, codigo: '45678912',
+        antecedentesPersonales: 'Hipertension', alergias: 'Penicilina',
+      }) } },
+      services
+    );
+    expect(bodyOf(result)).toEqual({ ok: true });
+  });
+
+  it('crearNotaEvolucion requiere rol psiquiatra', () => {
+    const services = buildServicesWithUser({
+      codigo: 'ADM001', password: 'secreta123', rol: 'administrador', nombre: 'Admin',
+      extraSheets: { _notas_evolucion: [NOTAS_HEADER] },
+    });
+    services.SpreadsheetApp._sheets['_usuarios'].push(['45678912', 'hash', 'salt', 'usuario', 'Maria Lopez']);
+    const token = loginToken(services, 'ADM001', 'secreta123');
+
+    const result = handlePost(
+      { postData: { contents: JSON.stringify({ accion: 'crearNotaEvolucion', token, codigo: '45678912', fecha: '2026-06-15', notas: 'texto' }) } },
+      services
+    );
+    expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
+  });
+
+  it('crearNotaEvolucion crea una nota para psiquiatra', () => {
+    const services = buildServicesWithUser({
+      codigo: 'PSI001', password: 'secreta123', rol: 'psiquiatra', nombre: 'Dra. Petra',
+      extraSheets: { _notas_evolucion: [NOTAS_HEADER] },
+    });
+    services.SpreadsheetApp._sheets['_usuarios'].push(['45678912', 'hash', 'salt', 'usuario', 'Maria Lopez']);
+    services.PropertiesService.getScriptProperties().setProperty('AES_KEY', AES_KEY);
+    const token = loginToken(services, 'PSI001', 'secreta123');
+
+    const result = handlePost(
+      { postData: { contents: JSON.stringify({ accion: 'crearNotaEvolucion', token, codigo: '45678912', fecha: '2026-06-15', notas: 'Paciente estable' }) } },
+      services
+    );
+    const body = bodyOf(result);
+    expect(body.ok).toBe(true);
+    expect(body.nota).toMatchObject({ pacienteCodigo: '45678912', fecha: '2026-06-15', notas: 'Paciente estable' });
   });
 });

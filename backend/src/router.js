@@ -5,10 +5,12 @@ import { requireAuth, requireAuthBody, cambiarPassword } from './guards.js';
 import { leerAgenda, crearCita, cambiarEstadoCita, leerMiAgenda, cancelarMiCita } from './agenda.js';
 import { leerHorarioConfig, leerBloqueos, actualizarHorarioConfig, crearBloqueo, eliminarBloqueo } from './horario.js';
 import { crearPaciente, actualizarPaciente, leerFichaPaciente, listarFichasPacientes } from './pacientes.js';
+import { leerAntecedentes, actualizarAntecedentes, crearNotaEvolucion, listarNotasEvolucion } from './historia-clinica.js';
 
 const ROLES_AGENDA = ['administrador', 'psiquiatra', 'recepcion'];
 const ROLES_HORARIO = ['administrador', 'psiquiatra'];
 const ROLES_PACIENTES = ['administrador', 'psiquiatra', 'recepcion'];
+const ROLES_HISTORIA_CLINICA = ['psiquiatra'];
 
 export function handleGet(e, services) {
   const p = (e && e.parameter) || {};
@@ -49,6 +51,18 @@ export function handleGet(e, services) {
 
     case 'listarFichasPacientes':
       return json_(requireAuth(p, ROLES_PACIENTES, () => listarFichasPacientes(services), services), services);
+
+    case 'leerAntecedentes':
+      return json_(
+        requireAuth(p, ROLES_HISTORIA_CLINICA, () => leerAntecedentes(p.codigo, services), services),
+        services
+      );
+
+    case 'listarNotasEvolucion':
+      return json_(
+        requireAuth(p, ROLES_HISTORIA_CLINICA, () => listarNotasEvolucion(p.codigo, services), services),
+        services
+      );
 
     default:
       return json_({ error: 'Accion no reconocida' }, services);
@@ -130,6 +144,18 @@ export function handlePost(e, services) {
     case 'actualizarPaciente':
       return json_(
         requireAuthBody(b.token, ROLES_PACIENTES, (user) => actualizarPaciente(b, user, services), services),
+        services
+      );
+
+    case 'actualizarAntecedentes':
+      return json_(
+        requireAuthBody(b.token, ROLES_HISTORIA_CLINICA, (user) => actualizarAntecedentes(b, user, services), services),
+        services
+      );
+
+    case 'crearNotaEvolucion':
+      return json_(
+        requireAuthBody(b.token, ROLES_HISTORIA_CLINICA, (user) => crearNotaEvolucion(b, user, services), services),
         services
       );
 
