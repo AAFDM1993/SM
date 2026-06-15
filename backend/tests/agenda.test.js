@@ -423,6 +423,20 @@ describe('cancelarMiCita', () => {
     expect(agenda.slots[0].estado).toBe('disponible');
   });
 
+  it('registra cita_cancelada en _log', () => {
+    const services = buildServices({
+      citas: [['c1', '2026-06-18', '09:00', '09:45', 'PAC001', 'Programada', 'ADM001', new Date(), new Date()]],
+    });
+    cancelarMiCita({ citaId: 'c1' }, USER_PACIENTE, services);
+
+    const logRows = services.SpreadsheetApp._sheets['_log'];
+    const logEntry = logRows.find((r) => r[3] === 'cita_cancelada');
+    expect(logEntry).toBeDefined();
+    expect(logEntry[1]).toBe('PAC001');
+    expect(logEntry[2]).toBe('usuario');
+    expect(logEntry[4]).toBe('c1');
+  });
+
   it('rechaza si la cita no existe', () => {
     const services = buildServices({});
     const result = cancelarMiCita({ citaId: 'no-existe' }, USER_PACIENTE, services);

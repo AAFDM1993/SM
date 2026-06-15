@@ -261,5 +261,7 @@ export function cancelarMiCita(b, user, services) {
   }
   sheet.getRange(cita._fila, 10, 1, 1).setValue('');
 
+  registrarLog(services, user.codigo, user.rol, 'cita_cancelada', citaId);
+
   return { ok: true };
 }
