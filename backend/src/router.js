@@ -4,9 +4,11 @@ import { listarUsuarios, guardarUsuario, eliminarUsuario, listarPacientes } from
 import { requireAuth, requireAuthBody, cambiarPassword } from './guards.js';
 import { leerAgenda, crearCita, cambiarEstadoCita, leerMiAgenda, cancelarMiCita } from './agenda.js';
 import { leerHorarioConfig, leerBloqueos, actualizarHorarioConfig, crearBloqueo, eliminarBloqueo } from './horario.js';
+import { crearPaciente, actualizarPaciente, leerFichaPaciente, listarFichasPacientes } from './pacientes.js';
 
 const ROLES_AGENDA = ['administrador', 'psiquiatra', 'recepcion'];
 const ROLES_HORARIO = ['administrador', 'psiquiatra'];
+const ROLES_PACIENTES = ['administrador', 'psiquiatra', 'recepcion'];
 
 export function handleGet(e, services) {
   const p = (e && e.parameter) || {};
@@ -38,6 +40,15 @@ export function handleGet(e, services) {
 
     case 'listarPacientes':
       return json_(requireAuth(p, ROLES_AGENDA, () => listarPacientes(services), services), services);
+
+    case 'leerFichaPaciente':
+      return json_(
+        requireAuth(p, ROLES_PACIENTES, () => leerFichaPaciente(p.codigo, services), services),
+        services
+      );
+
+    case 'listarFichasPacientes':
+      return json_(requireAuth(p, ROLES_PACIENTES, () => listarFichasPacientes(services), services), services);
 
     default:
       return json_({ error: 'Accion no reconocida' }, services);
@@ -107,6 +118,18 @@ export function handlePost(e, services) {
     case 'eliminarBloqueo':
       return json_(
         requireAuthBody(b.token, ROLES_HORARIO, (user) => eliminarBloqueo(b, user, services), services),
+        services
+      );
+
+    case 'crearPaciente':
+      return json_(
+        requireAuthBody(b.token, ROLES_PACIENTES, (user) => crearPaciente(b, user, services), services),
+        services
+      );
+
+    case 'actualizarPaciente':
+      return json_(
+        requireAuthBody(b.token, ROLES_PACIENTES, (user) => actualizarPaciente(b, user, services), services),
         services
       );
 

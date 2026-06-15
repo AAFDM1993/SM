@@ -8,6 +8,7 @@ const LOG_HEADER = ['timestamp', 'codigo', 'rol', 'accion', 'detalle'];
 const HORARIO_HEADER = ['diaSemana', 'activo', 'horaInicio', 'horaFin', 'duracionSlotMin'];
 const BLOQUEOS_HEADER = ['id', 'fechaInicio', 'fechaFin', 'motivo', 'creadoPor', 'fechaCreacion'];
 const CITAS_HEADER = ['id', 'fecha', 'horaInicio', 'horaFin', 'pacienteCodigo', 'estado', 'creadoPor', 'fechaCreacion', 'fechaActualizacion'];
+const PACIENTES_HEADER = ['codigo', 'fechaNacimiento', 'sexo', 'telefono', 'email', 'contactoEmergenciaNombre', 'contactoEmergenciaTelefono', 'fechaAlta', 'creadoPor'];
 
 const HORARIO_LABORAL = [
   ['Lunes', true, '09:00', '18:00', 45],
@@ -170,6 +171,52 @@ describe('handleGet', () => {
 
     const result = handleGet({ parameter: { accion: 'listarPacientes', token } }, services);
     expect(bodyOf(result)).toEqual({ ok: true, pacientes: [{ codigo: 'PAC001', nombre: 'Paciente Uno' }] });
+  });
+
+  it('leerFichaPaciente requiere rol administrador, psiquiatra o recepcion', () => {
+    const services = buildServicesWithUser({ codigo: 'USR001', password: 'secreta123', rol: 'usuario', nombre: 'Paciente' });
+    const token = loginToken(services, 'USR001', 'secreta123');
+
+    const result = handleGet({ parameter: { accion: 'leerFichaPaciente', token, codigo: 'USR001' } }, services);
+    expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
+  });
+
+  it('leerFichaPaciente devuelve la ficha del paciente para recepcion', () => {
+    const services = buildServicesWithUser({
+      codigo: 'REC001', password: 'secreta123', rol: 'recepcion', nombre: 'Recepcion',
+      extraSheets: { _pacientes: [PACIENTES_HEADER] },
+    });
+    services.SpreadsheetApp._sheets['_usuarios'].push(['45678912', 'hash', 'salt', 'usuario', 'Maria Lopez']);
+    const token = loginToken(services, 'REC001', 'secreta123');
+
+    const result = handleGet({ parameter: { accion: 'leerFichaPaciente', token, codigo: '45678912' } }, services);
+    expect(bodyOf(result)).toEqual({
+      ok: true,
+      paciente: {
+        codigo: '45678912', nombre: 'Maria Lopez', fechaNacimiento: '', sexo: '',
+        telefono: '', email: '', contactoEmergenciaNombre: '', contactoEmergenciaTelefono: '',
+      },
+    });
+  });
+
+  it('listarFichasPacientes requiere rol administrador, psiquiatra o recepcion', () => {
+    const services = buildServicesWithUser({ codigo: 'USR001', password: 'secreta123', rol: 'usuario', nombre: 'Paciente' });
+    const token = loginToken(services, 'USR001', 'secreta123');
+
+    const result = handleGet({ parameter: { accion: 'listarFichasPacientes', token } }, services);
+    expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
+  });
+
+  it('listarFichasPacientes devuelve la lista de fichas para recepcion', () => {
+    const services = buildServicesWithUser({
+      codigo: 'REC001', password: 'secreta123', rol: 'recepcion', nombre: 'Recepcion',
+      extraSheets: { _pacientes: [PACIENTES_HEADER] },
+    });
+    services.SpreadsheetApp._sheets['_usuarios'].push(['45678912', 'hash', 'salt', 'usuario', 'Maria Lopez']);
+    const token = loginToken(services, 'REC001', 'secreta123');
+
+    const result = handleGet({ parameter: { accion: 'listarFichasPacientes', token } }, services);
+    expect(bodyOf(result)).toEqual({ ok: true, pacientes: [{ codigo: '45678912', nombre: 'Maria Lopez', telefono: '', email: '' }] });
   });
 });
 
@@ -403,6 +450,59 @@ describe('handlePost', () => {
 
     const result = handlePost(
       { postData: { contents: JSON.stringify({ accion: 'eliminarBloqueo', token, bloqueoId: 'b1' }) } },
+      services
+    );
+    expect(bodyOf(result)).toEqual({ ok: true });
+  });
+
+  it('crearPaciente requiere rol administrador, psiquiatra o recepcion', () => {
+    const services = buildServicesWithUser({ codigo: 'USR001', password: 'secreta123', rol: 'usuario', nombre: 'Paciente' });
+    const token = loginToken(services, 'USR001', 'secreta123');
+
+    const result = handlePost(
+      { postData: { contents: JSON.stringify({ accion: 'crearPaciente', token, codigo: '45678912', nombre: 'Maria Lopez' }) } },
+      services
+    );
+    expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
+  });
+
+  it('crearPaciente crea un paciente nuevo para recepcion', () => {
+    const services = buildServicesWithUser({
+      codigo: 'REC001', password: 'secreta123', rol: 'recepcion', nombre: 'Recepcion',
+      extraSheets: { _pacientes: [PACIENTES_HEADER] },
+    });
+    const token = loginToken(services, 'REC001', 'secreta123');
+
+    const result = handlePost(
+      { postData: { contents: JSON.stringify({ accion: 'crearPaciente', token, codigo: '45678912', nombre: 'Maria Lopez' }) } },
+      services
+    );
+    const body = bodyOf(result);
+    expect(body.ok).toBe(true);
+    expect(body.paciente).toMatchObject({ codigo: '45678912', nombre: 'Maria Lopez' });
+  });
+
+  it('actualizarPaciente requiere rol administrador, psiquiatra o recepcion', () => {
+    const services = buildServicesWithUser({ codigo: 'USR001', password: 'secreta123', rol: 'usuario', nombre: 'Paciente' });
+    const token = loginToken(services, 'USR001', 'secreta123');
+
+    const result = handlePost(
+      { postData: { contents: JSON.stringify({ accion: 'actualizarPaciente', token, codigo: 'USR001', nombre: 'Paciente' }) } },
+      services
+    );
+    expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
+  });
+
+  it('actualizarPaciente actualiza la ficha de un paciente para recepcion', () => {
+    const services = buildServicesWithUser({
+      codigo: 'REC001', password: 'secreta123', rol: 'recepcion', nombre: 'Recepcion',
+      extraSheets: { _pacientes: [PACIENTES_HEADER] },
+    });
+    services.SpreadsheetApp._sheets['_usuarios'].push(['45678912', 'hash', 'salt', 'usuario', 'Maria Lopez']);
+    const token = loginToken(services, 'REC001', 'secreta123');
+
+    const result = handlePost(
+      { postData: { contents: JSON.stringify({ accion: 'actualizarPaciente', token, codigo: '45678912', nombre: 'Maria Lopez', telefono: '987654321' }) } },
       services
     );
     expect(bodyOf(result)).toEqual({ ok: true });
