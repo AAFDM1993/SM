@@ -138,6 +138,14 @@ export function initHistoriaClinicaView(container, ctx) {
       return;
     }
     renderNotas(paciente, notasResult.notas);
+
+    const prescripcionesResult = await apiGet('listarPrescripciones', { token: ctx.session.token, codigo: paciente.codigo });
+    if (prescripcionesResult.error) {
+      if (handleAuthError(prescripcionesResult)) return;
+      showError(prescripcionesResult.error);
+      return;
+    }
+    renderPrescripciones(paciente, prescripcionesResult.prescripciones);
   }
 
   function renderAntecedentes(paciente, antecedentes) {
@@ -339,6 +347,132 @@ export function initHistoriaClinicaView(container, ctx) {
       motivoInput.value = '';
       notasTextarea.value = '';
       diagnosticoInput.value = '';
+    });
+
+    section.appendChild(form);
+    fichaContainer.appendChild(section);
+  }
+
+  function renderPrescripciones(paciente, prescripciones) {
+    const section = document.createElement('section');
+    section.className = 'view-historia-clinica__prescripciones';
+
+    const titulo = document.createElement('h4');
+    titulo.textContent = 'Prescripciones';
+    section.appendChild(titulo);
+
+    const lista = document.createElement('ul');
+    lista.className = 'view-historia-clinica__prescripciones-lista';
+    section.appendChild(lista);
+
+    function renderListaPrescripciones() {
+      lista.innerHTML = '';
+      prescripciones.forEach((p) => {
+        const item = document.createElement('li');
+        item.className = 'view-historia-clinica__prescripcion';
+        const fin = p.fechaFin ? p.fechaFin : '(sin fecha fin)';
+        item.textContent = `${p.medicamento} — ${p.dosis} — ${p.frecuencia} — ${p.fechaInicio} → ${fin}`;
+        lista.appendChild(item);
+      });
+    }
+
+    renderListaPrescripciones();
+
+    const form = document.createElement('form');
+    form.className = 'view-historia-clinica__prescripcion-form';
+
+    const medLabel = document.createElement('label');
+    medLabel.textContent = 'Medicamento';
+    const medInput = document.createElement('input');
+    medInput.type = 'text';
+    medInput.className = 'view-historia-clinica__prescripcion-medicamento-input';
+    medLabel.appendChild(medInput);
+    form.appendChild(medLabel);
+
+    const dosisLabel = document.createElement('label');
+    dosisLabel.textContent = 'Dosis';
+    const dosisInput = document.createElement('input');
+    dosisInput.type = 'text';
+    dosisInput.className = 'view-historia-clinica__prescripcion-dosis-input';
+    dosisLabel.appendChild(dosisInput);
+    form.appendChild(dosisLabel);
+
+    const frecLabel = document.createElement('label');
+    frecLabel.textContent = 'Frecuencia';
+    const frecInput = document.createElement('input');
+    frecInput.type = 'text';
+    frecInput.className = 'view-historia-clinica__prescripcion-frecuencia-input';
+    frecLabel.appendChild(frecInput);
+    form.appendChild(frecLabel);
+
+    const fechaInicioLabel = document.createElement('label');
+    fechaInicioLabel.textContent = 'Fecha inicio';
+    const fechaInicioInput = document.createElement('input');
+    fechaInicioInput.type = 'date';
+    fechaInicioInput.className = 'view-historia-clinica__prescripcion-fechainicio-input';
+    fechaInicioInput.value = new Date().toISOString().slice(0, 10);
+    fechaInicioLabel.appendChild(fechaInicioInput);
+    form.appendChild(fechaInicioLabel);
+
+    const fechaFinLabel = document.createElement('label');
+    fechaFinLabel.textContent = 'Fecha fin (opcional)';
+    const fechaFinInput = document.createElement('input');
+    fechaFinInput.type = 'date';
+    fechaFinInput.className = 'view-historia-clinica__prescripcion-fechafin-input';
+    fechaFinLabel.appendChild(fechaFinInput);
+    form.appendChild(fechaFinLabel);
+
+    const formError = document.createElement('div');
+    formError.className = 'view-historia-clinica__prescripcion-form-error';
+    formError.hidden = true;
+    form.appendChild(formError);
+
+    const saveButton = document.createElement('button');
+    saveButton.type = 'submit';
+    saveButton.className = 'button button--primary';
+    saveButton.textContent = 'Guardar prescripción';
+    form.appendChild(saveButton);
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      formError.hidden = true;
+
+      const medicamento = medInput.value.trim();
+      const dosis = dosisInput.value.trim();
+      const frecuencia = frecInput.value.trim();
+      const fechaInicio = fechaInicioInput.value;
+      if (!medicamento || !dosis || !frecuencia || !fechaInicio) {
+        formError.textContent = 'medicamento, dosis, frecuencia y fechaInicio son requeridos';
+        formError.hidden = false;
+        return;
+      }
+
+      const result = await apiPost({
+        accion: 'crearPrescripcion',
+        token: ctx.session.token,
+        codigo: paciente.codigo,
+        medicamento,
+        dosis,
+        frecuencia,
+        fechaInicio,
+        fechaFin: fechaFinInput.value,
+      });
+
+      if (result.error) {
+        if (handleAuthError(result)) return;
+        formError.textContent = result.error;
+        formError.hidden = false;
+        return;
+      }
+
+      prescripciones.unshift(result.prescripcion);
+      renderListaPrescripciones();
+
+      medInput.value = '';
+      dosisInput.value = '';
+      frecInput.value = '';
+      fechaInicioInput.value = new Date().toISOString().slice(0, 10);
+      fechaFinInput.value = '';
     });
 
     section.appendChild(form);

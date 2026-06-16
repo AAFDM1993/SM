@@ -47,6 +47,7 @@ describe('initHistoriaClinicaView', () => {
       if (accion === 'listarFichasPacientes') return Promise.resolve({ ok: true, pacientes: PACIENTES });
       if (accion === 'leerAntecedentes') return Promise.resolve({ ok: true, antecedentes: ANTECEDENTES_MARIA });
       if (accion === 'listarNotasEvolucion') return Promise.resolve({ ok: true, notas: NOTAS_MARIA });
+      if (accion === 'listarPrescripciones') return Promise.resolve({ ok: true, prescripciones: [] });
       return Promise.resolve({ error: 'Accion no reconocida' });
     });
     apiPost.mockReset();
@@ -243,5 +244,85 @@ describe('initHistoriaClinicaView', () => {
 
     expect(getSession()).toBeNull();
     expect(window.location.href).toBe('/portal/?expired=1');
+  });
+
+  it('carga y muestra prescripciones al abrir ficha', async () => {
+    initHistoriaClinicaView(container, { session: SESSION, forced: false });
+    await flush();
+
+    container.querySelectorAll('tbody tr')[0].click();
+    await flush();
+
+    expect(apiGet).toHaveBeenCalledWith('listarPrescripciones', { token: 'psi-tok', codigo: '45678912' });
+    expect(container.querySelector('.view-historia-clinica__prescripciones')).not.toBeNull();
+  });
+
+  it('crea una nueva prescripcion y la antepone a la lista', async () => {
+    const nuevaPrescripcion = { id: 'p1', pacienteCodigo: '45678912', medicamento: 'Sertralina', dosis: '50mg', frecuencia: 'diario', fechaInicio: '2026-06-15', fechaFin: '', creadoPor: 'PSI001', fechaCreacion: new Date() };
+    apiPost.mockResolvedValue({ ok: true, prescripcion: nuevaPrescripcion });
+
+    initHistoriaClinicaView(container, { session: SESSION, forced: false });
+    await flush();
+    container.querySelectorAll('tbody tr')[0].click();
+    await flush();
+
+    const form = container.querySelector('.view-historia-clinica__prescripcion-form');
+    form.querySelector('.view-historia-clinica__prescripcion-medicamento-input').value = 'Sertralina';
+    form.querySelector('.view-historia-clinica__prescripcion-dosis-input').value = '50mg';
+    form.querySelector('.view-historia-clinica__prescripcion-frecuencia-input').value = 'diario';
+    form.querySelector('.view-historia-clinica__prescripcion-fechainicio-input').value = '2026-06-15';
+
+    form.dispatchEvent(new Event('submit', { cancelable: true }));
+    await flush();
+
+    expect(apiPost).toHaveBeenCalledWith(expect.objectContaining({
+      accion: 'crearPrescripcion',
+      token: 'psi-tok',
+      codigo: '45678912',
+      medicamento: 'Sertralina',
+    }));
+    const items = container.querySelectorAll('.view-historia-clinica__prescripcion');
+    expect(items.length).toBe(1);
+    expect(items[0].textContent).toContain('Sertralina');
+  });
+
+  it('valida campos requeridos antes de enviar prescripcion', async () => {
+    initHistoriaClinicaView(container, { session: SESSION, forced: false });
+    await flush();
+    container.querySelectorAll('tbody tr')[0].click();
+    await flush();
+
+    const form = container.querySelector('.view-historia-clinica__prescripcion-form');
+    form.dispatchEvent(new Event('submit', { cancelable: true }));
+    await flush();
+
+    const formError = container.querySelector('.view-historia-clinica__prescripcion-form-error');
+    expect(formError.hidden).toBe(false);
+    expect(formError.textContent).toBe('medicamento, dosis, frecuencia y fechaInicio son requeridos');
+    expect(apiPost).not.toHaveBeenCalled();
+  });
+
+  it('limpia el formulario de prescripcion despues de crear', async () => {
+    const nuevaPrescripcion = { id: 'p1', pacienteCodigo: '45678912', medicamento: 'Sertralina', dosis: '50mg', frecuencia: 'diario', fechaInicio: '2026-06-15', fechaFin: '', creadoPor: 'PSI001', fechaCreacion: new Date() };
+    apiPost.mockResolvedValue({ ok: true, prescripcion: nuevaPrescripcion });
+
+    initHistoriaClinicaView(container, { session: SESSION, forced: false });
+    await flush();
+    container.querySelectorAll('tbody tr')[0].click();
+    await flush();
+
+    const form = container.querySelector('.view-historia-clinica__prescripcion-form');
+    form.querySelector('.view-historia-clinica__prescripcion-medicamento-input').value = 'Sertralina';
+    form.querySelector('.view-historia-clinica__prescripcion-dosis-input').value = '50mg';
+    form.querySelector('.view-historia-clinica__prescripcion-frecuencia-input').value = 'diario';
+    form.querySelector('.view-historia-clinica__prescripcion-fechainicio-input').value = '2026-06-15';
+
+    form.dispatchEvent(new Event('submit', { cancelable: true }));
+    await flush();
+
+    expect(form.querySelector('.view-historia-clinica__prescripcion-medicamento-input').value).toBe('');
+    expect(form.querySelector('.view-historia-clinica__prescripcion-dosis-input').value).toBe('');
+    expect(form.querySelector('.view-historia-clinica__prescripcion-frecuencia-input').value).toBe('');
+    expect(form.querySelector('.view-historia-clinica__prescripcion-fechainicio-input').value).toBe(new Date().toISOString().slice(0, 10));
   });
 });
