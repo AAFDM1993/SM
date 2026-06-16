@@ -6,11 +6,13 @@ import { leerAgenda, crearCita, cambiarEstadoCita, leerMiAgenda, cancelarMiCita 
 import { leerHorarioConfig, leerBloqueos, actualizarHorarioConfig, crearBloqueo, eliminarBloqueo } from './horario.js';
 import { crearPaciente, actualizarPaciente, leerFichaPaciente, listarFichasPacientes } from './pacientes.js';
 import { leerAntecedentes, actualizarAntecedentes, crearNotaEvolucion, listarNotasEvolucion } from './historia-clinica.js';
+import { crearPrescripcion, listarPrescripciones } from './prescripciones.js';
 
 const ROLES_AGENDA = ['administrador', 'psiquiatra', 'recepcion'];
 const ROLES_HORARIO = ['administrador', 'psiquiatra'];
 const ROLES_PACIENTES = ['administrador', 'psiquiatra', 'recepcion'];
 const ROLES_HISTORIA_CLINICA = ['psiquiatra'];
+const ROLES_PRESCRIPCIONES = ['psiquiatra'];
 
 export function handleGet(e, services) {
   const p = (e && e.parameter) || {};
@@ -61,6 +63,12 @@ export function handleGet(e, services) {
     case 'listarNotasEvolucion':
       return json_(
         requireAuth(p, ROLES_HISTORIA_CLINICA, () => listarNotasEvolucion(p.codigo, services), services),
+        services
+      );
+
+    case 'listarPrescripciones':
+      return json_(
+        requireAuth(p, ROLES_PRESCRIPCIONES, () => listarPrescripciones(p.codigo, services), services),
         services
       );
 
@@ -156,6 +164,12 @@ export function handlePost(e, services) {
     case 'crearNotaEvolucion':
       return json_(
         requireAuthBody(b.token, ROLES_HISTORIA_CLINICA, (user) => crearNotaEvolucion(b, user, services), services),
+        services
+      );
+
+    case 'crearPrescripcion':
+      return json_(
+        requireAuthBody(b.token, ROLES_PRESCRIPCIONES, (user) => crearPrescripcion(b, user, services), services),
         services
       );
 

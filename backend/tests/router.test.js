@@ -11,6 +11,7 @@ const CITAS_HEADER = ['id', 'fecha', 'horaInicio', 'horaFin', 'pacienteCodigo', 
 const PACIENTES_HEADER = ['codigo', 'fechaNacimiento', 'sexo', 'telefono', 'email', 'contactoEmergenciaNombre', 'contactoEmergenciaTelefono', 'fechaAlta', 'creadoPor'];
 const ANTECEDENTES_HEADER = ['codigo', 'antecedentesPersonales', 'antecedentesPsiquiatricos', 'antecedentesFamiliares', 'alergias', 'medicacionActual', 'fechaActualizacion', 'actualizadoPor'];
 const NOTAS_HEADER = ['id', 'pacienteCodigo', 'fecha', 'motivoConsulta', 'notas', 'diagnostico', 'creadoPor', 'fechaCreacion'];
+const PRESCRIPCIONES_HEADER = ['id', 'pacienteCodigo', 'medicamento', 'dosis', 'frecuencia', 'fechaInicio', 'fechaFin', 'creadoPor', 'fechaCreacion'];
 const AES_KEY = '000102030405060708090a0b0c0d0e0f';
 
 const HORARIO_LABORAL = [
@@ -274,6 +275,23 @@ describe('handleGet', () => {
 
     const result = handleGet({ parameter: { accion: 'listarNotasEvolucion', token, codigo: '45678912' } }, services);
     expect(bodyOf(result)).toEqual({ ok: true, notas: [] });
+  });
+
+  it('listarPrescripciones requiere rol psiquiatra', () => {
+    const services = buildServicesWithUser({ codigo: 'ADM001', password: 'secreta123', rol: 'administrador', nombre: 'Admin', extraSheets: { _prescripciones: [PRESCRIPCIONES_HEADER] } });
+    const token = loginToken(services, 'ADM001', 'secreta123');
+    const result = handleGet({ parameter: { accion: 'listarPrescripciones', token, codigo: 'PAC001' } }, services);
+    expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
+  });
+
+  it('listarPrescripciones devuelve prescripciones para psiquiatra', () => {
+    const services = buildServicesWithUser({ codigo: 'PSI001', password: 'secreta123', rol: 'psiquiatra', nombre: 'Dra. Petra', extraSheets: { _prescripciones: [PRESCRIPCIONES_HEADER] } });
+    const token = loginToken(services, 'PSI001', 'secreta123');
+    services.SpreadsheetApp.getActiveSpreadsheet().getSheetByName('_usuarios')
+      .appendRow(['PAC001', 'x', 'x', 'usuario', 'Maria']);
+    const result = handleGet({ parameter: { accion: 'listarPrescripciones', token, codigo: 'PAC001' } }, services);
+    expect(bodyOf(result).ok).toBe(true);
+    expect(bodyOf(result).prescripciones).toEqual([]);
   });
 });
 
@@ -630,5 +648,38 @@ describe('handlePost', () => {
     const body = bodyOf(result);
     expect(body.ok).toBe(true);
     expect(body.nota).toMatchObject({ pacienteCodigo: '45678912', fecha: '2026-06-15', notas: 'Paciente estable' });
+  });
+
+  it('crearPrescripcion requiere rol psiquiatra', () => {
+    const services = buildServicesWithUser({ codigo: 'ADM001', password: 'secreta123', rol: 'administrador', nombre: 'Admin', extraSheets: { _prescripciones: [PRESCRIPCIONES_HEADER] } });
+    const token = loginToken(services, 'ADM001', 'secreta123');
+    const result = handlePost({ postData: { contents: JSON.stringify({ accion: 'crearPrescripcion', token, codigo: 'PAC001', medicamento: 'X', dosis: 'Y', frecuencia: 'Z', fechaInicio: '2026-06-01' }) } }, services);
+    expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
+  });
+
+  it('crearPrescripcion retorna error si faltan campos requeridos', () => {
+    const services = buildServicesWithUser({ codigo: 'PSI001', password: 'secreta123', rol: 'psiquiatra', nombre: 'Dra. Petra', extraSheets: { _prescripciones: [PRESCRIPCIONES_HEADER] } });
+    const token = loginToken(services, 'PSI001', 'secreta123');
+    const result = handlePost({ postData: { contents: JSON.stringify({ accion: 'crearPrescripcion', token, codigo: 'PAC001', medicamento: '', dosis: '50mg', frecuencia: 'diario', fechaInicio: '2026-06-01' }) } }, services);
+    expect(bodyOf(result)).toEqual({ error: 'codigo, medicamento, dosis, frecuencia y fechaInicio son requeridos' });
+  });
+
+  it('crearPrescripcion crea prescripcion para psiquiatra', () => {
+    const services = buildServicesWithUser({ codigo: 'PSI001', password: 'secreta123', rol: 'psiquiatra', nombre: 'Dra. Petra', extraSheets: { _prescripciones: [PRESCRIPCIONES_HEADER] } });
+    services.PropertiesService.getScriptProperties().setProperty('AES_KEY', AES_KEY);
+    const token = loginToken(services, 'PSI001', 'secreta123');
+    services.SpreadsheetApp.getActiveSpreadsheet().getSheetByName('_usuarios')
+      .appendRow(['PAC001', 'x', 'x', 'usuario', 'Maria']);
+    const result = handlePost({ postData: { contents: JSON.stringify({ accion: 'crearPrescripcion', token, codigo: 'PAC001', medicamento: 'Sertralina', dosis: '50mg', frecuencia: 'diario', fechaInicio: '2026-06-01' }) } }, services);
+    expect(bodyOf(result).ok).toBe(true);
+    expect(bodyOf(result).prescripcion.medicamento).toBe('Sertralina');
+  });
+
+  it('crearPrescripcion retorna error si paciente no encontrado', () => {
+    const services = buildServicesWithUser({ codigo: 'PSI001', password: 'secreta123', rol: 'psiquiatra', nombre: 'Dra. Petra', extraSheets: { _prescripciones: [PRESCRIPCIONES_HEADER] } });
+    services.PropertiesService.getScriptProperties().setProperty('AES_KEY', AES_KEY);
+    const token = loginToken(services, 'PSI001', 'secreta123');
+    const result = handlePost({ postData: { contents: JSON.stringify({ accion: 'crearPrescripcion', token, codigo: 'NOEXISTE', medicamento: 'Sertralina', dosis: '50mg', frecuencia: 'diario', fechaInicio: '2026-06-01' }) } }, services);
+    expect(bodyOf(result)).toEqual({ error: 'Paciente no encontrado' });
   });
 });
