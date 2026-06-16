@@ -25,7 +25,7 @@ export function crearPrescripcion(b, user, services) {
   if (!sheet) return { error: 'Hoja de prescripciones no encontrada' };
   const fechaFin = String(b.fechaFin || '');
   const id = services.Utilities.getUuid();
-  const fechaCreacion = new Date();
+  const fechaCreacion = new Date().toISOString();
   sheet.appendRow([
     id, usuario.codigo,
     encrypt_(medicamento, services), encrypt_(dosis, services), encrypt_(frecuencia, services),
@@ -44,12 +44,17 @@ export function listarPrescripciones(codigo, services) {
   const rows = last < 2 ? [] : sheet.getRange(2, 1, last - 1, 9).getValues();
   const prescripciones = rows
     .filter((row) => String(row[1]).trim().toLowerCase() === usuario.codigo.toLowerCase())
-    .map((row, index) => ({
-      id: String(row[0]), pacienteCodigo: String(row[1]),
-      medicamento: decrypt_(row[2], services), dosis: decrypt_(row[3], services), frecuencia: decrypt_(row[4], services),
-      fechaInicio: String(row[5]), fechaFin: String(row[6]), creadoPor: String(row[7]), fechaCreacion: row[8],
-      _index: index,
-    }))
+    .map((row, index) => {
+      function safeDecrypt(val) {
+        try { return decrypt_(val, services); } catch { return '[cifrado inválido]'; }
+      }
+      return {
+        id: String(row[0]), pacienteCodigo: String(row[1]),
+        medicamento: safeDecrypt(row[2]), dosis: safeDecrypt(row[3]), frecuencia: safeDecrypt(row[4]),
+        fechaInicio: String(row[5]), fechaFin: String(row[6]), creadoPor: String(row[7]), fechaCreacion: String(row[8]),
+        _index: index,
+      };
+    })
     .sort((a, b) => {
       if (a.fechaInicio !== b.fechaInicio) return a.fechaInicio < b.fechaInicio ? 1 : -1;
       const timeDiff = new Date(b.fechaCreacion).getTime() - new Date(a.fechaCreacion).getTime();
