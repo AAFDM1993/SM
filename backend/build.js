@@ -27,6 +27,7 @@ function stripImportsExports(source) {
     .split('\n')
     .filter((line) => !/^\s*import\s.+from\s+['"].*['"];?\s*$/.test(line))
     .map((line) => line.replace(/^export\s+(function|const|class|let|var)\s+/, '$1 '))
+    .map((line) => line.replace(/^const /, 'var ').replace(/^let /, 'var '))
     .join('\n');
 }
 
