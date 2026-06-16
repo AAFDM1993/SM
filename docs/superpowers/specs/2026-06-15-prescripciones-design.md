@@ -229,10 +229,10 @@ Mock de `apiGet` extendido para responder a `'listarPrescripciones'` con `{ ok: 
 | etapa | archivos | tests |
 |-------|----------|-------|
 | Antes de esta entrega | 27 | 341 |
-| + `prescripciones.test.js` (nuevo) | 28 | 353 |
-| + tests en `router.test.js` | 28 | 358 |
-| + tests en `historia-clinica.test.js` | 28 | 362 |
-| **Final** | **28** | **362** |
+| + `prescripciones.test.js` (nuevo, 12 tests) | 28 | 353 |
+| + tests en `router.test.js` (+6) | 28 | 359 |
+| + tests en `historia-clinica.test.js` (+4) | 28 | 363 |
+| **Final** | **28** | **363** |
 
 ---
 
