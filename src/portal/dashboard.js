@@ -1,4 +1,5 @@
 import './dashboard.css';
+import './views.css';
 import { getSession, isAuthenticated, clearSession, redirectTo } from './session.js';
 import { initMobileMenu } from './nav.js';
 import { initInicioView } from './views/inicio.js';
