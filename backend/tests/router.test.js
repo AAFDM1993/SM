@@ -288,7 +288,7 @@ describe('handleGet', () => {
     const services = buildServicesWithUser({ codigo: 'PSI001', password: 'secreta123', rol: 'psiquiatra', nombre: 'Dra. Petra', extraSheets: { _prescripciones: [PRESCRIPCIONES_HEADER] } });
     const token = loginToken(services, 'PSI001', 'secreta123');
     services.SpreadsheetApp.getActiveSpreadsheet().getSheetByName('_usuarios')
-      .appendRow(['PAC001', 'x', 'x', 'usuario', 'Maria']);
+      .appendRow(['PAC001', 'x', 'x', 'usuario', 'Maria', '', '']);
     const result = handleGet({ parameter: { accion: 'listarPrescripciones', token, codigo: 'PAC001' } }, services);
     expect(bodyOf(result).ok).toBe(true);
     expect(bodyOf(result).prescripciones).toEqual([]);
@@ -669,7 +669,7 @@ describe('handlePost', () => {
     services.PropertiesService.getScriptProperties().setProperty('AES_KEY', AES_KEY);
     const token = loginToken(services, 'PSI001', 'secreta123');
     services.SpreadsheetApp.getActiveSpreadsheet().getSheetByName('_usuarios')
-      .appendRow(['PAC001', 'x', 'x', 'usuario', 'Maria']);
+      .appendRow(['PAC001', 'x', 'x', 'usuario', 'Maria', '', '']);
     const result = handlePost({ postData: { contents: JSON.stringify({ accion: 'crearPrescripcion', token, codigo: 'PAC001', medicamento: 'Sertralina', dosis: '50mg', frecuencia: 'diario', fechaInicio: '2026-06-01' }) } }, services);
     expect(bodyOf(result).ok).toBe(true);
     expect(bodyOf(result).prescripcion.medicamento).toBe('Sertralina');
