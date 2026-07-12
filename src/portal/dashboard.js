@@ -10,6 +10,7 @@ import { initMiAgendaView } from './views/mi-agenda.js';
 import { initPacientesView } from './views/pacientes.js';
 import { initHistoriaClinicaView } from './views/historia-clinica.js';
 import { initMisEscalasView } from './views/mis-escalas.js';
+import { initMisActividadesView } from './views/mis-actividades.js';
 
 export const MENUS = {
   administrador: [
@@ -36,7 +37,7 @@ export const MENUS = {
   usuario: [
     { id: 'mi-agenda', label: 'Mi agenda', enabled: true },
     { id: 'mis-escalas', label: 'Mis escalas', enabled: true },
-    { id: 'mis-actividades', label: 'Mis actividades', enabled: false },
+    { id: 'mis-actividades', label: 'Mis actividades', enabled: true },
     { id: 'cambiar-password', label: 'Cambiar contraseña', enabled: true },
   ],
 };
@@ -50,6 +51,7 @@ export const VIEWS = {
   pacientes: initPacientesView,
   'historia-clinica': initHistoriaClinicaView,
   'mis-escalas': initMisEscalasView,
+  'mis-actividades': initMisActividadesView,
 };
 
 export function initDashboard() {
