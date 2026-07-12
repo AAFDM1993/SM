@@ -155,6 +155,14 @@ export function initHistoriaClinicaView(container, ctx) {
       return;
     }
     renderEscalas(paciente, escalasResult.escalas);
+
+    const tareasResult = await apiGet('listarTareasPaciente', { token: ctx.session.token, codigo: paciente.codigo });
+    if (tareasResult.error) {
+      if (handleAuthError(tareasResult)) return;
+      showError(tareasResult.error);
+      return;
+    }
+    renderTareas(paciente, tareasResult.tareas);
   }
 
   function renderAntecedentes(paciente, antecedentes) {
@@ -680,6 +688,221 @@ export function initHistoriaClinicaView(container, ctx) {
     acciones.appendChild(formEnviar);
     acciones.appendChild(enviarSuccess);
     section.appendChild(acciones);
+    fichaContainer.appendChild(section);
+  }
+
+  function renderTareas(paciente, tareas) {
+    const section = document.createElement('section');
+    section.className = 'view-historia-clinica__tareas';
+
+    const titulo = document.createElement('h4');
+    titulo.textContent = 'Tareas';
+    section.appendChild(titulo);
+
+    const tabla = document.createElement('table');
+    tabla.className = 'view-historia-clinica__tareas-tabla';
+    const thead = document.createElement('thead');
+    thead.innerHTML = '<tr><th>Título</th><th>Tipo</th><th>Período</th><th>Cumplimiento</th></tr>';
+    tabla.appendChild(thead);
+    const tbody = document.createElement('tbody');
+    tabla.appendChild(tbody);
+    section.appendChild(tabla);
+
+    function calcularM(tarea) {
+      const hoy = new Date().toISOString().slice(0, 10);
+      const fin = tarea.fechaFin < hoy ? tarea.fechaFin : hoy;
+      if (fin < tarea.fechaInicio) return 0;
+      if (tarea.tipo === 'única') return 1;
+      let count = 0;
+      let cur = tarea.fechaInicio;
+      while (cur <= fin) {
+        count++;
+        const d = new Date(cur + 'T12:00:00Z');
+        if (tarea.frecuencia === 'diaria') d.setUTCDate(d.getUTCDate() + 1);
+        else d.setUTCDate(d.getUTCDate() + 7);
+        cur = d.toISOString().slice(0, 10);
+      }
+      return count;
+    }
+
+    function renderTablaTareas() {
+      tbody.innerHTML = '';
+      tareas.forEach((t) => {
+        const tr = document.createElement('tr');
+        const tipoLabel = t.tipo === 'única' ? 'Única' :
+          t.frecuencia === 'diaria' ? 'Recurrente (diaria)' : 'Recurrente (semanal)';
+        const periodo = t.tipo === 'única' ? t.fechaInicio : `${t.fechaInicio} — ${t.fechaFin}`;
+        const M = calcularM(t);
+        const N = t.registros.length;
+        const cumplimiento = M === 0 ? '—' : `${N}/${M} completadas`;
+        tr.innerHTML = `<td>${t.titulo}</td><td>${tipoLabel}</td><td>${periodo}</td><td>${cumplimiento}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+    renderTablaTareas();
+
+    const btnAsignar = document.createElement('button');
+    btnAsignar.type = 'button';
+    btnAsignar.className = 'button button--primary view-historia-clinica__tareas-btn-asignar';
+    btnAsignar.textContent = 'Asignar tarea';
+
+    const formAsignar = document.createElement('form');
+    formAsignar.className = 'view-historia-clinica__tareas-form-asignar';
+    formAsignar.hidden = true;
+
+    const tituloLabel = document.createElement('label');
+    tituloLabel.textContent = 'Título';
+    const tituloInput = document.createElement('input');
+    tituloInput.type = 'text';
+    tituloInput.className = 'view-historia-clinica__tareas-titulo-input';
+    tituloLabel.appendChild(tituloInput);
+    formAsignar.appendChild(tituloLabel);
+
+    const descLabel = document.createElement('label');
+    descLabel.textContent = 'Descripción (opcional)';
+    const descTextarea = document.createElement('textarea');
+    descTextarea.className = 'view-historia-clinica__tareas-descripcion-input';
+    descLabel.appendChild(descTextarea);
+    formAsignar.appendChild(descLabel);
+
+    const tipoDiv = document.createElement('div');
+    tipoDiv.className = 'view-historia-clinica__tareas-tipo-group';
+
+    const radioUnica = document.createElement('input');
+    radioUnica.type = 'radio';
+    radioUnica.name = 'tarea-tipo';
+    radioUnica.value = 'única';
+    radioUnica.className = 'view-historia-clinica__tareas-tipo-unica';
+    radioUnica.checked = true;
+    const labelUnica = document.createElement('label');
+    labelUnica.textContent = ' Única';
+    labelUnica.prepend(radioUnica);
+
+    const radioRecurrente = document.createElement('input');
+    radioRecurrente.type = 'radio';
+    radioRecurrente.name = 'tarea-tipo';
+    radioRecurrente.value = 'recurrente';
+    radioRecurrente.className = 'view-historia-clinica__tareas-tipo-recurrente';
+    const labelRecurrente = document.createElement('label');
+    labelRecurrente.textContent = ' Recurrente';
+    labelRecurrente.prepend(radioRecurrente);
+
+    tipoDiv.appendChild(labelUnica);
+    tipoDiv.appendChild(labelRecurrente);
+    formAsignar.appendChild(tipoDiv);
+
+    const camposUnica = document.createElement('div');
+    camposUnica.className = 'view-historia-clinica__tareas-campos-unica';
+    const fechaUnicaLabel = document.createElement('label');
+    fechaUnicaLabel.textContent = 'Fecha';
+    const fechaUnicaInput = document.createElement('input');
+    fechaUnicaInput.type = 'date';
+    fechaUnicaInput.className = 'view-historia-clinica__tareas-fecha-unica-input';
+    fechaUnicaInput.value = new Date().toISOString().slice(0, 10);
+    fechaUnicaLabel.appendChild(fechaUnicaInput);
+    camposUnica.appendChild(fechaUnicaLabel);
+    formAsignar.appendChild(camposUnica);
+
+    const camposRecurrente = document.createElement('div');
+    camposRecurrente.className = 'view-historia-clinica__tareas-campos-recurrente';
+    camposRecurrente.hidden = true;
+
+    const frecLabel = document.createElement('label');
+    frecLabel.textContent = 'Frecuencia';
+    const frecSelect = document.createElement('select');
+    frecSelect.className = 'view-historia-clinica__tareas-frecuencia-select';
+    [['diaria', 'Diaria'], ['semanal', 'Semanal']].forEach(([v, l]) => {
+      const opt = document.createElement('option');
+      opt.value = v; opt.textContent = l;
+      frecSelect.appendChild(opt);
+    });
+    frecLabel.appendChild(frecSelect);
+    camposRecurrente.appendChild(frecLabel);
+
+    const fechaInicioLabel = document.createElement('label');
+    fechaInicioLabel.textContent = 'Fecha inicio';
+    const fechaInicioInput = document.createElement('input');
+    fechaInicioInput.type = 'date';
+    fechaInicioInput.className = 'view-historia-clinica__tareas-fechainicio-input';
+    fechaInicioInput.value = new Date().toISOString().slice(0, 10);
+    fechaInicioLabel.appendChild(fechaInicioInput);
+    camposRecurrente.appendChild(fechaInicioLabel);
+
+    const fechaFinLabel = document.createElement('label');
+    fechaFinLabel.textContent = 'Fecha fin';
+    const fechaFinInput = document.createElement('input');
+    fechaFinInput.type = 'date';
+    fechaFinInput.className = 'view-historia-clinica__tareas-fechafin-input';
+    fechaFinLabel.appendChild(fechaFinInput);
+    camposRecurrente.appendChild(fechaFinLabel);
+
+    formAsignar.appendChild(camposRecurrente);
+
+    radioUnica.addEventListener('change', () => {
+      camposUnica.hidden = false;
+      camposRecurrente.hidden = true;
+    });
+    radioRecurrente.addEventListener('change', () => {
+      camposUnica.hidden = true;
+      camposRecurrente.hidden = false;
+    });
+
+    const tareaError = document.createElement('div');
+    tareaError.className = 'view-historia-clinica__tareas-error';
+    tareaError.hidden = true;
+    formAsignar.appendChild(tareaError);
+
+    const submitBtn = document.createElement('button');
+    submitBtn.type = 'submit';
+    submitBtn.className = 'button button--primary';
+    submitBtn.textContent = 'Guardar';
+    formAsignar.appendChild(submitBtn);
+
+    btnAsignar.addEventListener('click', () => {
+      formAsignar.hidden = !formAsignar.hidden;
+      tareaError.hidden = true;
+    });
+
+    formAsignar.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      tareaError.hidden = true;
+      const tipo = radioUnica.checked ? 'única' : 'recurrente';
+      const payload = {
+        accion: 'asignarTarea',
+        token: ctx.session.token,
+        pacienteCodigo: paciente.codigo,
+        titulo: tituloInput.value.trim(),
+        descripcion: descTextarea.value.trim(),
+        tipo,
+      };
+      if (tipo === 'única') {
+        payload.fechaInicio = fechaUnicaInput.value;
+        payload.fechaFin = fechaUnicaInput.value;
+      } else {
+        payload.frecuencia = frecSelect.value;
+        payload.fechaInicio = fechaInicioInput.value;
+        payload.fechaFin = fechaFinInput.value;
+      }
+      const result = await apiPost(payload);
+      if (result.error) {
+        if (handleAuthError(result)) return;
+        tareaError.textContent = result.error;
+        tareaError.hidden = false;
+        return;
+      }
+      tareas.unshift({ ...result.tarea, registros: [] });
+      renderTablaTareas();
+      formAsignar.hidden = true;
+      tituloInput.value = '';
+      descTextarea.value = '';
+      radioUnica.checked = true;
+      camposUnica.hidden = false;
+      camposRecurrente.hidden = true;
+      fechaUnicaInput.value = new Date().toISOString().slice(0, 10);
+    });
+
+    section.appendChild(btnAsignar);
+    section.appendChild(formAsignar);
     fichaContainer.appendChild(section);
   }
 

@@ -49,6 +49,7 @@ describe('initHistoriaClinicaView', () => {
       if (accion === 'listarNotasEvolucion') return Promise.resolve({ ok: true, notas: NOTAS_MARIA });
       if (accion === 'listarPrescripciones') return Promise.resolve({ ok: true, prescripciones: [] });
       if (accion === 'listarEscalasPaciente') return Promise.resolve({ ok: true, escalas: [] });
+      if (accion === 'listarTareasPaciente') return Promise.resolve({ ok: true, tareas: [] });
       return Promise.resolve({ error: 'Accion no reconocida' });
     });
     apiPost.mockReset();
@@ -414,5 +415,104 @@ describe('initHistoriaClinicaView', () => {
     await flush();
     expect(container.querySelector('.view-historia-clinica__escalas-enviar-error').textContent)
       .toBe('El paciente no tiene email registrado');
+  });
+
+  it('renderiza sección Tareas al abrir ficha del paciente', async () => {
+    initHistoriaClinicaView(container, { session: SESSION, forced: false });
+    await flush();
+    container.querySelectorAll('tbody tr')[0].click();
+    await flush();
+    expect(apiGet).toHaveBeenCalledWith('listarTareasPaciente', { token: 'psi-tok', codigo: '45678912' });
+    expect(container.querySelector('.view-historia-clinica__tareas')).not.toBeNull();
+  });
+
+  it('muestra tareas existentes con cumplimiento N/M en la tabla', async () => {
+    apiGet.mockImplementation((accion) => {
+      if (accion === 'listarFichasPacientes') return Promise.resolve({ ok: true, pacientes: PACIENTES });
+      if (accion === 'leerAntecedentes') return Promise.resolve({ ok: true, antecedentes: ANTECEDENTES_MARIA });
+      if (accion === 'listarNotasEvolucion') return Promise.resolve({ ok: true, notas: [] });
+      if (accion === 'listarPrescripciones') return Promise.resolve({ ok: true, prescripciones: [] });
+      if (accion === 'listarEscalasPaciente') return Promise.resolve({ ok: true, escalas: [] });
+      if (accion === 'listarTareasPaciente') return Promise.resolve({
+        ok: true,
+        tareas: [{
+          id: 't1', titulo: 'Meditar', tipo: 'única', frecuencia: '',
+          fechaInicio: '2024-01-10', fechaFin: '2024-01-10',
+          registros: [{ fechaOcurrencia: '2024-01-10' }],
+        }],
+      });
+      return Promise.resolve({ error: 'Accion no reconocida' });
+    });
+    initHistoriaClinicaView(container, { session: SESSION, forced: false });
+    await flush();
+    container.querySelectorAll('tbody tr')[0].click();
+    await flush();
+    const filas = container.querySelectorAll('.view-historia-clinica__tareas-tabla tbody tr');
+    expect(filas.length).toBe(1);
+    expect(filas[0].textContent).toContain('Meditar');
+    expect(filas[0].textContent).toContain('1/1 completadas');
+  });
+
+  it('botón Asignar tarea muestra y oculta el formulario', async () => {
+    initHistoriaClinicaView(container, { session: SESSION, forced: false });
+    await flush();
+    container.querySelectorAll('tbody tr')[0].click();
+    await flush();
+    const btn = container.querySelector('.view-historia-clinica__tareas-btn-asignar');
+    const form = container.querySelector('.view-historia-clinica__tareas-form-asignar');
+    expect(form.hidden).toBe(true);
+    btn.click();
+    expect(form.hidden).toBe(false);
+    btn.click();
+    expect(form.hidden).toBe(true);
+  });
+
+  it('seleccionar tipo Recurrente muestra campos-recurrente y oculta campos-unica', async () => {
+    initHistoriaClinicaView(container, { session: SESSION, forced: false });
+    await flush();
+    container.querySelectorAll('tbody tr')[0].click();
+    await flush();
+    container.querySelector('.view-historia-clinica__tareas-btn-asignar').click();
+    const radioRecurrente = container.querySelector('.view-historia-clinica__tareas-tipo-recurrente');
+    radioRecurrente.checked = true;
+    radioRecurrente.dispatchEvent(new Event('change'));
+    expect(container.querySelector('.view-historia-clinica__tareas-campos-recurrente').hidden).toBe(false);
+    expect(container.querySelector('.view-historia-clinica__tareas-campos-unica').hidden).toBe(true);
+  });
+
+  it('asignar tarea exitosa inserta fila en tabla con 0/1 cumplimiento', async () => {
+    apiPost.mockResolvedValue({
+      ok: true,
+      tarea: { id: 'tnew', titulo: 'Nueva tarea', tipo: 'única', frecuencia: '', fechaInicio: '2024-01-20', fechaFin: '2024-01-20', creadoPor: 'PSI001', fechaCreacion: new Date().toISOString() },
+    });
+    initHistoriaClinicaView(container, { session: SESSION, forced: false });
+    await flush();
+    container.querySelectorAll('tbody tr')[0].click();
+    await flush();
+    container.querySelector('.view-historia-clinica__tareas-btn-asignar').click();
+    container.querySelector('.view-historia-clinica__tareas-titulo-input').value = 'Nueva tarea';
+    const form = container.querySelector('.view-historia-clinica__tareas-form-asignar');
+    form.dispatchEvent(new Event('submit', { cancelable: true }));
+    await flush();
+    const filas = container.querySelectorAll('.view-historia-clinica__tareas-tabla tbody tr');
+    expect(filas.length).toBe(1);
+    expect(filas[0].textContent).toContain('Nueva tarea');
+    expect(filas[0].textContent).toContain('0/1 completadas');
+    expect(form.hidden).toBe(true);
+  });
+
+  it('error al asignar tarea muestra mensaje', async () => {
+    apiPost.mockResolvedValue({ error: 'Paciente no encontrado' });
+    initHistoriaClinicaView(container, { session: SESSION, forced: false });
+    await flush();
+    container.querySelectorAll('tbody tr')[0].click();
+    await flush();
+    container.querySelector('.view-historia-clinica__tareas-btn-asignar').click();
+    container.querySelector('.view-historia-clinica__tareas-titulo-input').value = 'X';
+    container.querySelector('.view-historia-clinica__tareas-form-asignar').dispatchEvent(new Event('submit', { cancelable: true }));
+    await flush();
+    const err = container.querySelector('.view-historia-clinica__tareas-error');
+    expect(err.hidden).toBe(false);
+    expect(err.textContent).toBe('Paciente no encontrado');
   });
 });
