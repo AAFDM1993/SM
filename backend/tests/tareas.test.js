@@ -132,6 +132,21 @@ describe('listarTareasPaciente', () => {
     const services = buildServices();
     expect(listarTareasPaciente('NOEXISTE', services)).toEqual({ error: 'Paciente no encontrado' });
   });
+
+  it('incluye registros de tarea recurrente', () => {
+    const services = buildServices({
+      usuarios: [USUARIO_ROW],
+      tareas: [TAREA_RECURRENTE_ROW],
+      registros: [
+        ['r1', 't2', '2026-07-10', 'primer dia', 'PAC001', '2026-07-10T20:00:00.000Z'],
+        ['r2', 't2', '2026-07-11', '', 'PAC001', '2026-07-11T20:00:00.000Z'],
+      ],
+    });
+    const result = listarTareasPaciente('PAC001', services);
+    expect(result.ok).toBe(true);
+    expect(result.tareas[0].registros.length).toBe(2);
+    expect(result.tareas[0].registros[0].fechaOcurrencia).toBe('2026-07-10');
+  });
 });
 
 describe('listarMisActividades', () => {
@@ -218,5 +233,13 @@ describe('completarOcurrencia', () => {
     completarOcurrencia({ tareaId: 't1', fechaOcurrencia: '2026-07-10' }, PACIENTE_USER, services);
     const log = services.SpreadsheetApp.getActiveSpreadsheet().getSheetByName('_log');
     expect(log.getRange(2, 1, 1, 5).getValues()[0][3]).toBe('tarea_completada');
+  });
+
+  it('permite completar distintas fechas de tarea recurrente', () => {
+    const services = buildServices({ usuarios: [USUARIO_ROW], tareas: [TAREA_RECURRENTE_ROW] });
+    const r1 = completarOcurrencia({ tareaId: 't2', fechaOcurrencia: '2026-07-10' }, PACIENTE_USER, services);
+    expect(r1.ok).toBe(true);
+    const r2 = completarOcurrencia({ tareaId: 't2', fechaOcurrencia: '2026-07-11' }, PACIENTE_USER, services);
+    expect(r2.ok).toBe(true);
   });
 });
