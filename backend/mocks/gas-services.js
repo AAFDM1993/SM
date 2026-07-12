@@ -195,5 +195,6 @@ export function createMockServices(initialData = {}) {
     PropertiesService: createMockPropertiesService(initialData.properties || {}),
     ContentService: createMockContentService(),
     CalendarApp: createMockCalendarApp(),
+    MailApp: { sendEmail: () => {} },
   };
 }
