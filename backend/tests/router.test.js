@@ -5,6 +5,8 @@ import { handleGet, handlePost } from '../src/router.js';
 
 const USUARIOS_HEADER = ['codigo', 'password', 'salt', 'rol', 'nombre'];
 const LOG_HEADER = ['timestamp', 'codigo', 'rol', 'accion', 'detalle'];
+const ESCALAS_HEADER = ['id', 'pacienteCodigo', 'escalaTipo', 'modo', 'estado', 'respuestas', 'puntajeTotal', 'partAPositivo', 'creadoPor', 'fechaCreacion', 'completadoPor', 'fechaCompletada'];
+const PACIENTES_HEADER_ROUTER = ['codigo', 'fechaNacimiento', 'sexo', 'telefono', 'email', 'contactoEmergenciaNombre', 'contactoEmergenciaTelefono', 'fechaAlta', 'creadoPor'];
 const HORARIO_HEADER = ['diaSemana', 'activo', 'horaInicio', 'horaFin', 'duracionSlotMin'];
 const BLOQUEOS_HEADER = ['id', 'fechaInicio', 'fechaFin', 'motivo', 'creadoPor', 'fechaCreacion'];
 const CITAS_HEADER = ['id', 'fecha', 'horaInicio', 'horaFin', 'pacienteCodigo', 'estado', 'creadoPor', 'fechaCreacion', 'fechaActualizacion'];
@@ -681,5 +683,95 @@ describe('handlePost', () => {
     const token = loginToken(services, 'PSI001', 'secreta123');
     const result = handlePost({ postData: { contents: JSON.stringify({ accion: 'crearPrescripcion', token, codigo: 'NOEXISTE', medicamento: 'Sertralina', dosis: '50mg', frecuencia: 'diario', fechaInicio: '2026-06-01' }) } }, services);
     expect(bodyOf(result)).toEqual({ error: 'Paciente no encontrado' });
+  });
+});
+
+describe('handleGet escalas', () => {
+  it('listarEscalasPaciente permite psiquiatra', () => {
+    const services = buildServicesWithUser({ codigo: 'PSI001', password: 'pass', rol: 'psiquiatra', nombre: 'Dra', extraSheets: {
+      _usuarios: [USUARIOS_HEADER, ['PAC001', 'x', 'x', 'usuario', 'Maria']],
+      _escalas_aplicaciones: [ESCALAS_HEADER],
+    }});
+    const token = loginToken(services, 'PSI001', 'pass');
+    const result = handleGet({ parameter: { accion: 'listarEscalasPaciente', token, codigo: 'PAC001' } }, services);
+    expect(bodyOf(result).ok).toBe(true);
+  });
+
+  it('listarEscalasPaciente rechaza usuario', () => {
+    const services = buildServicesWithUser({ codigo: 'PAC001', password: 'pass', rol: 'usuario', nombre: 'Maria', extraSheets: { _escalas_aplicaciones: [ESCALAS_HEADER] } });
+    const token = loginToken(services, 'PAC001', 'pass');
+    const result = handleGet({ parameter: { accion: 'listarEscalasPaciente', token, codigo: 'PAC001' } }, services);
+    expect(bodyOf(result).error).toBe('Permiso denegado');
+  });
+
+  it('listarMisEscalas permite usuario', () => {
+    const services = buildServicesWithUser({ codigo: 'PAC001', password: 'pass', rol: 'usuario', nombre: 'Maria', extraSheets: { _escalas_aplicaciones: [ESCALAS_HEADER] } });
+    const token = loginToken(services, 'PAC001', 'pass');
+    const result = handleGet({ parameter: { accion: 'listarMisEscalas', token } }, services);
+    expect(bodyOf(result).ok).toBe(true);
+  });
+
+  it('listarMisEscalas rechaza psiquiatra', () => {
+    const services = buildServicesWithUser({ codigo: 'PSI001', password: 'pass', rol: 'psiquiatra', nombre: 'Dra', extraSheets: { _escalas_aplicaciones: [ESCALAS_HEADER] } });
+    const token = loginToken(services, 'PSI001', 'pass');
+    const result = handleGet({ parameter: { accion: 'listarMisEscalas', token } }, services);
+    expect(bodyOf(result).error).toBe('Permiso denegado');
+  });
+});
+
+describe('handlePost escalas', () => {
+  function respuestasCompletas(valor = 2) {
+    const r = {};
+    for (let i = 1; i <= 18; i++) r[`q${i}`] = valor;
+    return r;
+  }
+
+  it('aplicarEscala permite psiquiatra', () => {
+    const services = buildServicesWithUser({ codigo: 'PSI001', password: 'pass', rol: 'psiquiatra', nombre: 'Dra', extraSheets: {
+      _usuarios: [USUARIOS_HEADER, ['PAC001', 'x', 'x', 'usuario', 'Maria']],
+      _escalas_aplicaciones: [ESCALAS_HEADER],
+    }});
+    const token = loginToken(services, 'PSI001', 'pass');
+    const result = handlePost({ postData: { contents: JSON.stringify({ accion: 'aplicarEscala', token, pacienteCodigo: 'PAC001', escalaTipo: 'asrs-v1.1', respuestas: respuestasCompletas() }) } }, services);
+    expect(bodyOf(result).ok).toBe(true);
+  });
+
+  it('aplicarEscala rechaza recepcion', () => {
+    const services = buildServicesWithUser({ codigo: 'REC001', password: 'pass', rol: 'recepcion', nombre: 'Rec', extraSheets: { _escalas_aplicaciones: [ESCALAS_HEADER] } });
+    const token = loginToken(services, 'REC001', 'pass');
+    const result = handlePost({ postData: { contents: JSON.stringify({ accion: 'aplicarEscala', token, pacienteCodigo: 'PAC001', escalaTipo: 'asrs-v1.1', respuestas: respuestasCompletas() }) } }, services);
+    expect(bodyOf(result).error).toBe('Permiso denegado');
+  });
+
+  it('asignarEscala permite psiquiatra', () => {
+    const services = buildServicesWithUser({ codigo: 'PSI001', password: 'pass', rol: 'psiquiatra', nombre: 'Dra', extraSheets: {
+      _usuarios: [USUARIOS_HEADER, ['PAC001', 'x', 'x', 'usuario', 'Maria']],
+      _pacientes: [PACIENTES_HEADER_ROUTER, ['PAC001', '', '', '', 'maria@example.com', '', '', '', '']],
+      _escalas_aplicaciones: [ESCALAS_HEADER],
+    }});
+    const token = loginToken(services, 'PSI001', 'pass');
+    const result = handlePost({ postData: { contents: JSON.stringify({ accion: 'asignarEscala', token, pacienteCodigo: 'PAC001', escalaTipo: 'asrs-v1.1' }) } }, services);
+    expect(bodyOf(result).ok).toBe(true);
+  });
+
+  it('completarEscala permite usuario', () => {
+    const services = buildServicesWithUser({ codigo: 'PAC001', password: 'pass', rol: 'usuario', nombre: 'Maria', extraSheets: {
+      _pacientes: [PACIENTES_HEADER_ROUTER, ['PAC001', '', '', '', 'maria@example.com', '', '', '', '']],
+      _escalas_aplicaciones: [ESCALAS_HEADER],
+    }});
+    // Primero crear la aplicacion directamente en la hoja
+    services.SpreadsheetApp._sheets['_escalas_aplicaciones'].push(
+      ['app-001', 'PAC001', 'asrs-v1.1', 'autoaplicada', 'pendiente', '', '', '', 'PSI001', new Date().toISOString(), '', '']
+    );
+    const token = loginToken(services, 'PAC001', 'pass');
+    const result = handlePost({ postData: { contents: JSON.stringify({ accion: 'completarEscala', token, aplicacionId: 'app-001', respuestas: respuestasCompletas() }) } }, services);
+    expect(bodyOf(result).ok).toBe(true);
+  });
+
+  it('completarEscala rechaza psiquiatra', () => {
+    const services = buildServicesWithUser({ codigo: 'PSI001', password: 'pass', rol: 'psiquiatra', nombre: 'Dra', extraSheets: { _escalas_aplicaciones: [ESCALAS_HEADER] } });
+    const token = loginToken(services, 'PSI001', 'pass');
+    const result = handlePost({ postData: { contents: JSON.stringify({ accion: 'completarEscala', token, aplicacionId: 'x', respuestas: respuestasCompletas() }) } }, services);
+    expect(bodyOf(result).error).toBe('Permiso denegado');
   });
 });

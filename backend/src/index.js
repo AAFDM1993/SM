@@ -30,6 +30,7 @@ function setupSheets() {
     { name: '_antecedentes',    header: ['codigo', 'antecedentesPersonales', 'antecedentesPsiquiatricos', 'antecedentesFamiliares', 'alergias', 'medicacionActual', 'fechaActualizacion', 'actualizadoPor'] },
     { name: '_notas_evolucion', header: ['id', 'pacienteCodigo', 'fecha', 'motivoConsulta', 'notas', 'diagnostico', 'creadoPor', 'fechaCreacion'] },
     { name: '_prescripciones',  header: ['id', 'pacienteCodigo', 'medicamento', 'dosis', 'frecuencia', 'fechaInicio', 'fechaFin', 'creadoPor', 'fechaCreacion'] },
+    { name: '_escalas_aplicaciones', header: ['id', 'pacienteCodigo', 'escalaTipo', 'modo', 'estado', 'respuestas', 'puntajeTotal', 'partAPositivo', 'creadoPor', 'fechaCreacion', 'completadoPor', 'fechaCompletada'] },
     { name: '_log',             header: ['timestamp', 'codigo', 'rol', 'accion', 'detalle'] },
   ];
 

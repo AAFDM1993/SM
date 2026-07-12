@@ -7,12 +7,14 @@ import { leerHorarioConfig, leerBloqueos, actualizarHorarioConfig, crearBloqueo,
 import { crearPaciente, actualizarPaciente, leerFichaPaciente, listarFichasPacientes } from './pacientes.js';
 import { leerAntecedentes, actualizarAntecedentes, crearNotaEvolucion, listarNotasEvolucion } from './historia-clinica.js';
 import { crearPrescripcion, listarPrescripciones } from './prescripciones.js';
+import { aplicarEscala, asignarEscala, completarEscala, listarEscalasPaciente, listarMisEscalas } from './escalas.js';
 
 const ROLES_AGENDA = ['administrador', 'psiquiatra', 'recepcion'];
 const ROLES_HORARIO = ['administrador', 'psiquiatra'];
 const ROLES_PACIENTES = ['administrador', 'psiquiatra', 'recepcion'];
 const ROLES_HISTORIA_CLINICA = ['psiquiatra'];
 const ROLES_PRESCRIPCIONES = ['psiquiatra'];
+const ROLES_ESCALAS = ['psiquiatra'];
 
 export function handleGet(e, services) {
   const p = (e && e.parameter) || {};
@@ -69,6 +71,18 @@ export function handleGet(e, services) {
     case 'listarPrescripciones':
       return json_(
         requireAuth(p, ROLES_PRESCRIPCIONES, () => listarPrescripciones(p.codigo, services), services),
+        services
+      );
+
+    case 'listarEscalasPaciente':
+      return json_(
+        requireAuth(p, ROLES_ESCALAS, () => listarEscalasPaciente(p.codigo, services), services),
+        services
+      );
+
+    case 'listarMisEscalas':
+      return json_(
+        requireAuth(p, ['usuario'], (user) => listarMisEscalas(user, services), services),
         services
       );
 
@@ -170,6 +184,24 @@ export function handlePost(e, services) {
     case 'crearPrescripcion':
       return json_(
         requireAuthBody(b.token, ROLES_PRESCRIPCIONES, (user) => crearPrescripcion(b, user, services), services),
+        services
+      );
+
+    case 'aplicarEscala':
+      return json_(
+        requireAuthBody(b.token, ROLES_ESCALAS, (user) => aplicarEscala(b, user, services), services),
+        services
+      );
+
+    case 'asignarEscala':
+      return json_(
+        requireAuthBody(b.token, ROLES_ESCALAS, (user) => asignarEscala(b, user, services), services),
+        services
+      );
+
+    case 'completarEscala':
+      return json_(
+        requireAuthBody(b.token, ['usuario'], (user) => completarEscala(b, user, services), services),
         services
       );
 
