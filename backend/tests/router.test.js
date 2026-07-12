@@ -14,6 +14,8 @@ const PACIENTES_HEADER = ['codigo', 'fechaNacimiento', 'sexo', 'telefono', 'emai
 const ANTECEDENTES_HEADER = ['codigo', 'antecedentesPersonales', 'antecedentesPsiquiatricos', 'antecedentesFamiliares', 'alergias', 'medicacionActual', 'fechaActualizacion', 'actualizadoPor'];
 const NOTAS_HEADER = ['id', 'pacienteCodigo', 'fecha', 'motivoConsulta', 'notas', 'diagnostico', 'creadoPor', 'fechaCreacion'];
 const PRESCRIPCIONES_HEADER = ['id', 'pacienteCodigo', 'medicamento', 'dosis', 'frecuencia', 'fechaInicio', 'fechaFin', 'creadoPor', 'fechaCreacion'];
+const TAREAS_HEADER_R = ['id','pacienteCodigo','titulo','descripcion','tipo','frecuencia','fechaInicio','fechaFin','creadoPor','fechaCreacion'];
+const REGISTROS_HEADER_R = ['id','tareaId','fechaOcurrencia','nota','completadoPor','fechaCompletacion'];
 const AES_KEY = '000102030405060708090a0b0c0d0e0f';
 
 const HORARIO_LABORAL = [
@@ -294,6 +296,43 @@ describe('handleGet', () => {
     const result = handleGet({ parameter: { accion: 'listarPrescripciones', token, codigo: 'PAC001' } }, services);
     expect(bodyOf(result).ok).toBe(true);
     expect(bodyOf(result).prescripciones).toEqual([]);
+  });
+
+  it('listarTareasPaciente permite psiquiatra', () => {
+    const services = buildServicesWithUser({
+      codigo: 'PSI001', password: 'clave123', rol: 'psiquiatra', nombre: 'Dra. Petra',
+      extraSheets: { _tareas: [TAREAS_HEADER_R], _tareas_registros: [REGISTROS_HEADER_R] },
+    });
+    services.SpreadsheetApp._sheets['_usuarios'].push(['PAC001', 'x', 'x', 'usuario', 'Maria']);
+    const token = loginToken(services, 'PSI001', 'clave123');
+    const result = handleGet({ parameter: { accion: 'listarTareasPaciente', token, codigo: 'PAC001' } }, services);
+    expect(bodyOf(result).ok).toBe(true);
+    expect(bodyOf(result).tareas).toEqual([]);
+  });
+
+  it('listarTareasPaciente rechaza usuario', () => {
+    const services = buildServicesWithUser({ codigo: 'USR001', password: 'clave123', rol: 'usuario', nombre: 'Paciente' });
+    const token = loginToken(services, 'USR001', 'clave123');
+    const result = handleGet({ parameter: { accion: 'listarTareasPaciente', token, codigo: 'USR001' } }, services);
+    expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
+  });
+
+  it('listarMisActividades permite usuario', () => {
+    const services = buildServicesWithUser({
+      codigo: 'USR001', password: 'clave123', rol: 'usuario', nombre: 'Paciente',
+      extraSheets: { _tareas: [TAREAS_HEADER_R], _tareas_registros: [REGISTROS_HEADER_R] },
+    });
+    const token = loginToken(services, 'USR001', 'clave123');
+    const result = handleGet({ parameter: { accion: 'listarMisActividades', token } }, services);
+    expect(bodyOf(result).ok).toBe(true);
+    expect(bodyOf(result).tareas).toEqual([]);
+  });
+
+  it('listarMisActividades rechaza psiquiatra', () => {
+    const services = buildServicesWithUser({ codigo: 'PSI001', password: 'clave123', rol: 'psiquiatra', nombre: 'Dra. Petra' });
+    const token = loginToken(services, 'PSI001', 'clave123');
+    const result = handleGet({ parameter: { accion: 'listarMisActividades', token } }, services);
+    expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
   });
 });
 
@@ -683,6 +722,50 @@ describe('handlePost', () => {
     const token = loginToken(services, 'PSI001', 'secreta123');
     const result = handlePost({ postData: { contents: JSON.stringify({ accion: 'crearPrescripcion', token, codigo: 'NOEXISTE', medicamento: 'Sertralina', dosis: '50mg', frecuencia: 'diario', fechaInicio: '2026-06-01' }) } }, services);
     expect(bodyOf(result)).toEqual({ error: 'Paciente no encontrado' });
+  });
+
+  it('asignarTarea permite psiquiatra', () => {
+    const services = buildServicesWithUser({
+      codigo: 'PSI001', password: 'clave123', rol: 'psiquiatra', nombre: 'Dra. Petra',
+      extraSheets: { _tareas: [TAREAS_HEADER_R], _tareas_registros: [REGISTROS_HEADER_R] },
+    });
+    services.SpreadsheetApp._sheets['_usuarios'].push(['PAC001', 'x', 'x', 'usuario', 'Maria']);
+    const token = loginToken(services, 'PSI001', 'clave123');
+    const result = handlePost({
+      postData: { contents: JSON.stringify({ accion: 'asignarTarea', token, pacienteCodigo: 'PAC001', titulo: 'Meditar', tipo: 'única', fechaInicio: '2026-07-15', fechaFin: '2026-07-15' }) },
+    }, services);
+    expect(bodyOf(result).ok).toBe(true);
+  });
+
+  it('asignarTarea rechaza usuario', () => {
+    const services = buildServicesWithUser({ codigo: 'USR001', password: 'clave123', rol: 'usuario', nombre: 'Paciente' });
+    const token = loginToken(services, 'USR001', 'clave123');
+    const result = handlePost({
+      postData: { contents: JSON.stringify({ accion: 'asignarTarea', token, pacienteCodigo: 'PAC001', titulo: 'X', tipo: 'única', fechaInicio: '2026-07-15', fechaFin: '2026-07-15' }) },
+    }, services);
+    expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
+  });
+
+  it('completarOcurrencia permite usuario', () => {
+    const TAREA_ROW = ['t1', 'USR001', 'Meditar', '', 'única', '', '2026-07-15', '2026-07-15', 'PSI001', '2026-07-14T10:00:00.000Z'];
+    const services = buildServicesWithUser({
+      codigo: 'USR001', password: 'clave123', rol: 'usuario', nombre: 'Paciente',
+      extraSheets: { _tareas: [TAREAS_HEADER_R, TAREA_ROW], _tareas_registros: [REGISTROS_HEADER_R] },
+    });
+    const token = loginToken(services, 'USR001', 'clave123');
+    const result = handlePost({
+      postData: { contents: JSON.stringify({ accion: 'completarOcurrencia', token, tareaId: 't1', fechaOcurrencia: '2026-07-15' }) },
+    }, services);
+    expect(bodyOf(result).ok).toBe(true);
+  });
+
+  it('completarOcurrencia rechaza psiquiatra', () => {
+    const services = buildServicesWithUser({ codigo: 'PSI001', password: 'clave123', rol: 'psiquiatra', nombre: 'Dra. Petra' });
+    const token = loginToken(services, 'PSI001', 'clave123');
+    const result = handlePost({
+      postData: { contents: JSON.stringify({ accion: 'completarOcurrencia', token, tareaId: 't1', fechaOcurrencia: '2026-07-15' }) },
+    }, services);
+    expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
   });
 });
 

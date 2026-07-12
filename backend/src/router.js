@@ -8,6 +8,7 @@ import { crearPaciente, actualizarPaciente, leerFichaPaciente, listarFichasPacie
 import { leerAntecedentes, actualizarAntecedentes, crearNotaEvolucion, listarNotasEvolucion } from './historia-clinica.js';
 import { crearPrescripcion, listarPrescripciones } from './prescripciones.js';
 import { aplicarEscala, asignarEscala, completarEscala, listarEscalasPaciente, listarMisEscalas } from './escalas.js';
+import { asignarTarea, listarTareasPaciente, listarMisActividades, completarOcurrencia } from './tareas.js';
 
 const ROLES_AGENDA = ['administrador', 'psiquiatra', 'recepcion'];
 const ROLES_HORARIO = ['administrador', 'psiquiatra'];
@@ -15,6 +16,7 @@ const ROLES_PACIENTES = ['administrador', 'psiquiatra', 'recepcion'];
 const ROLES_HISTORIA_CLINICA = ['psiquiatra'];
 const ROLES_PRESCRIPCIONES = ['psiquiatra'];
 const ROLES_ESCALAS = ['psiquiatra'];
+const ROLES_TAREAS = ['psiquiatra'];
 
 export function handleGet(e, services) {
   const p = (e && e.parameter) || {};
@@ -83,6 +85,18 @@ export function handleGet(e, services) {
     case 'listarMisEscalas':
       return json_(
         requireAuth(p, ['usuario'], (user) => listarMisEscalas(user, services), services),
+        services
+      );
+
+    case 'listarTareasPaciente':
+      return json_(
+        requireAuth(p, ROLES_TAREAS, () => listarTareasPaciente(p.codigo, services), services),
+        services
+      );
+
+    case 'listarMisActividades':
+      return json_(
+        requireAuth(p, ['usuario'], (user) => listarMisActividades(user, services), services),
         services
       );
 
@@ -202,6 +216,18 @@ export function handlePost(e, services) {
     case 'completarEscala':
       return json_(
         requireAuthBody(b.token, ['usuario'], (user) => completarEscala(b, user, services), services),
+        services
+      );
+
+    case 'asignarTarea':
+      return json_(
+        requireAuthBody(b.token, ROLES_TAREAS, (user) => asignarTarea(b, user, services), services),
+        services
+      );
+
+    case 'completarOcurrencia':
+      return json_(
+        requireAuthBody(b.token, ['usuario'], (user) => completarOcurrencia(b, user, services), services),
         services
       );
 

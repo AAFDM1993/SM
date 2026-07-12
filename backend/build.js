@@ -16,6 +16,7 @@ const FILES = [
   'historia-clinica.js',
   'prescripciones.js',
   'escalas.js',
+  'tareas.js',
   'auth.js',
   'guards.js',
   'http.js',
