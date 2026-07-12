@@ -622,16 +622,15 @@ export function initHistoriaClinicaView(container, ctx) {
     enviarError.hidden = true;
     formEnviar.appendChild(enviarError);
 
-    const enviarSuccess = document.createElement('div');
-    enviarSuccess.className = 'view-historia-clinica__escalas-enviar-success';
-    enviarSuccess.hidden = true;
-    formEnviar.appendChild(enviarSuccess);
-
     const submitEnviar = document.createElement('button');
     submitEnviar.type = 'submit';
     submitEnviar.className = 'button button--primary';
     submitEnviar.textContent = 'Enviar';
     formEnviar.appendChild(submitEnviar);
+
+    const enviarSuccess = document.createElement('div');
+    enviarSuccess.className = 'view-historia-clinica__escalas-enviar-success';
+    enviarSuccess.hidden = true;
 
     btnEnviar.addEventListener('click', () => {
       formEnviar.hidden = !formEnviar.hidden;
@@ -679,6 +678,7 @@ export function initHistoriaClinicaView(container, ctx) {
     acciones.appendChild(formAplicar);
     acciones.appendChild(btnEnviar);
     acciones.appendChild(formEnviar);
+    acciones.appendChild(enviarSuccess);
     section.appendChild(acciones);
     fichaContainer.appendChild(section);
   }

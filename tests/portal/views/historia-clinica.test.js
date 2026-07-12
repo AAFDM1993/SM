@@ -399,6 +399,8 @@ describe('initHistoriaClinicaView', () => {
     await flush();
     expect(apiPost).toHaveBeenCalledWith(expect.objectContaining({ accion: 'asignarEscala' }));
     expect(container.querySelector('.view-historia-clinica__escalas-enviar-success').hidden).toBe(false);
+    const tbodyRows = container.querySelectorAll('.view-historia-clinica__escalas-tabla tbody tr');
+    expect(tbodyRows.length).toBe(1);
   });
 
   it('error sin email muestra mensaje especifico', async () => {
