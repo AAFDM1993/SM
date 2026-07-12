@@ -48,6 +48,7 @@ describe('initHistoriaClinicaView', () => {
       if (accion === 'leerAntecedentes') return Promise.resolve({ ok: true, antecedentes: ANTECEDENTES_MARIA });
       if (accion === 'listarNotasEvolucion') return Promise.resolve({ ok: true, notas: NOTAS_MARIA });
       if (accion === 'listarPrescripciones') return Promise.resolve({ ok: true, prescripciones: [] });
+      if (accion === 'listarEscalasPaciente') return Promise.resolve({ ok: true, escalas: [] });
       return Promise.resolve({ error: 'Accion no reconocida' });
     });
     apiPost.mockReset();
@@ -324,5 +325,92 @@ describe('initHistoriaClinicaView', () => {
     expect(form.querySelector('.view-historia-clinica__prescripcion-dosis-input').value).toBe('');
     expect(form.querySelector('.view-historia-clinica__prescripcion-frecuencia-input').value).toBe('');
     expect(form.querySelector('.view-historia-clinica__prescripcion-fechainicio-input').value).toBe(new Date().toISOString().slice(0, 10));
+  });
+
+  it('renderiza seccion de escalas al abrir ficha', async () => {
+    initHistoriaClinicaView(container, { session: SESSION });
+    await flush();
+    const tr = container.querySelector('tbody tr');
+    tr.click();
+    await flush();
+    expect(container.querySelector('.view-historia-clinica__escalas')).not.toBeNull();
+  });
+
+  it('boton Aplicar escala muestra formulario con preguntas', async () => {
+    initHistoriaClinicaView(container, { session: SESSION });
+    await flush();
+    container.querySelector('tbody tr').click();
+    await flush();
+    const btn = container.querySelector('.view-historia-clinica__escalas-btn-aplicar');
+    btn.click();
+    expect(container.querySelector('.view-historia-clinica__escalas-form-aplicar').hidden).toBe(false);
+    expect(container.querySelectorAll('input[type="radio"]').length).toBeGreaterThan(0);
+  });
+
+  it('boton Enviar al paciente muestra formulario de asignacion', async () => {
+    initHistoriaClinicaView(container, { session: SESSION });
+    await flush();
+    container.querySelector('tbody tr').click();
+    await flush();
+    const btn = container.querySelector('.view-historia-clinica__escalas-btn-enviar');
+    btn.click();
+    expect(container.querySelector('.view-historia-clinica__escalas-form-enviar').hidden).toBe(false);
+  });
+
+  it('abrir un formulario cierra el otro', async () => {
+    initHistoriaClinicaView(container, { session: SESSION });
+    await flush();
+    container.querySelector('tbody tr').click();
+    await flush();
+    container.querySelector('.view-historia-clinica__escalas-btn-aplicar').click();
+    container.querySelector('.view-historia-clinica__escalas-btn-enviar').click();
+    expect(container.querySelector('.view-historia-clinica__escalas-form-aplicar').hidden).toBe(true);
+    expect(container.querySelector('.view-historia-clinica__escalas-form-enviar').hidden).toBe(false);
+  });
+
+  it('aplicar escala agrega resultado a la tabla', async () => {
+    apiPost.mockResolvedValue({ ok: true, aplicacion: { id: 'a1', pacienteCodigo: '45678912', escalaTipo: 'asrs-v1.1', modo: 'manual', estado: 'completada', puntajeTotal: 36, partAPositivo: true, fechaCompletada: '2026-07-12T10:00:00.000Z' } });
+    initHistoriaClinicaView(container, { session: SESSION });
+    await flush();
+    container.querySelector('tbody tr').click();
+    await flush();
+    container.querySelector('.view-historia-clinica__escalas-btn-aplicar').click();
+    // Select all radios
+    for (let i = 1; i <= 18; i++) {
+      const radio = container.querySelector(`input[name="aplicar-q${i}"][value="2"]`);
+      if (radio) radio.checked = true;
+    }
+    const form = container.querySelector('.view-historia-clinica__escalas-form-aplicar');
+    form.dispatchEvent(new Event('submit'));
+    await flush();
+    expect(apiPost).toHaveBeenCalledWith(expect.objectContaining({ accion: 'aplicarEscala' }));
+    expect(container.querySelector('.view-historia-clinica__escalas-tabla tbody').textContent).toContain('36');
+  });
+
+  it('enviar escala al paciente muestra exito y agrega fila pendiente', async () => {
+    apiPost.mockResolvedValue({ ok: true, aplicacionId: 'a2' });
+    initHistoriaClinicaView(container, { session: SESSION });
+    await flush();
+    container.querySelector('tbody tr').click();
+    await flush();
+    container.querySelector('.view-historia-clinica__escalas-btn-enviar').click();
+    const form = container.querySelector('.view-historia-clinica__escalas-form-enviar');
+    form.dispatchEvent(new Event('submit'));
+    await flush();
+    expect(apiPost).toHaveBeenCalledWith(expect.objectContaining({ accion: 'asignarEscala' }));
+    expect(container.querySelector('.view-historia-clinica__escalas-enviar-success').hidden).toBe(false);
+  });
+
+  it('error sin email muestra mensaje especifico', async () => {
+    apiPost.mockResolvedValue({ error: 'El paciente no tiene email registrado' });
+    initHistoriaClinicaView(container, { session: SESSION });
+    await flush();
+    container.querySelector('tbody tr').click();
+    await flush();
+    container.querySelector('.view-historia-clinica__escalas-btn-enviar').click();
+    container.querySelector('.view-historia-clinica__escalas-form-enviar').dispatchEvent(new Event('submit'));
+    await flush();
+    expect(container.querySelector('.view-historia-clinica__escalas-enviar-error').textContent)
+      .toBe('El paciente no tiene email registrado');
   });
 });

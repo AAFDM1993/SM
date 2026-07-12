@@ -1,5 +1,6 @@
 import { apiGet, apiPost } from '../api.js';
 import { handleAuthError } from '../session.js';
+import { ESCALAS_CATALOGO, renderPreguntasEscala } from './escalas-catalogo.js';
 
 const CAMPOS_ANTECEDENTES = [
   { key: 'antecedentesPersonales', label: 'Antecedentes personales' },
@@ -146,6 +147,14 @@ export function initHistoriaClinicaView(container, ctx) {
       return;
     }
     renderPrescripciones(paciente, prescripcionesResult.prescripciones);
+
+    const escalasResult = await apiGet('listarEscalasPaciente', { token: ctx.session.token, codigo: paciente.codigo });
+    if (escalasResult.error) {
+      if (handleAuthError(escalasResult)) return;
+      showError(escalasResult.error);
+      return;
+    }
+    renderEscalas(paciente, escalasResult.escalas);
   }
 
   function renderAntecedentes(paciente, antecedentes) {
@@ -476,6 +485,201 @@ export function initHistoriaClinicaView(container, ctx) {
     });
 
     section.appendChild(form);
+    fichaContainer.appendChild(section);
+  }
+
+  function renderEscalas(paciente, escalas) {
+    const section = document.createElement('section');
+    section.className = 'view-historia-clinica__escalas';
+
+    const titulo = document.createElement('h4');
+    titulo.textContent = 'Escalas de evaluación';
+    section.appendChild(titulo);
+
+    const tabla = document.createElement('table');
+    tabla.className = 'view-historia-clinica__escalas-tabla';
+    const thead = document.createElement('thead');
+    thead.innerHTML = '<tr><th>Tipo</th><th>Modo</th><th>Estado</th><th>Puntaje</th><th>Part A</th><th>Fecha</th></tr>';
+    tabla.appendChild(thead);
+    const tbody = document.createElement('tbody');
+    tabla.appendChild(tbody);
+    section.appendChild(tabla);
+
+    function renderTablaEscalas() {
+      tbody.innerHTML = '';
+      escalas.forEach((e) => {
+        const tr = document.createElement('tr');
+        const modoLabel = e.modo === 'manual' ? 'Aplicada' : e.estado === 'pendiente' ? 'Pendiente (paciente)' : 'Autoaplicada';
+        const puntaje = e.estado === 'completada' ? e.puntajeTotal : '—';
+        const partA = e.estado === 'completada' ? (e.partAPositivo ? 'Positivo' : 'Negativo') : '—';
+        const fecha = (e.fechaCompletada || e.fechaCreacion || '').slice(0, 10);
+        tr.innerHTML = `<td>${ESCALAS_CATALOGO[e.escalaTipo]?.nombre || e.escalaTipo}</td><td>${modoLabel}</td><td>${e.estado}</td><td>${puntaje}</td><td>${partA}</td><td>${fecha}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+    renderTablaEscalas();
+
+    const acciones = document.createElement('div');
+    acciones.className = 'view-historia-clinica__escalas-acciones';
+
+    // --- Formulario Aplicar ---
+    const btnAplicar = document.createElement('button');
+    btnAplicar.type = 'button';
+    btnAplicar.className = 'button button--primary view-historia-clinica__escalas-btn-aplicar';
+    btnAplicar.textContent = 'Aplicar escala ahora';
+
+    const formAplicar = document.createElement('form');
+    formAplicar.className = 'view-historia-clinica__escalas-form-aplicar';
+    formAplicar.hidden = true;
+
+    const selectAplicarLabel = document.createElement('label');
+    selectAplicarLabel.textContent = 'Escala';
+    const selectAplicar = document.createElement('select');
+    selectAplicar.className = 'view-historia-clinica__escalas-select';
+    Object.entries(ESCALAS_CATALOGO).forEach(([tipo, escala]) => {
+      const opt = document.createElement('option');
+      opt.value = tipo;
+      opt.textContent = escala.nombre;
+      selectAplicar.appendChild(opt);
+    });
+    selectAplicarLabel.appendChild(selectAplicar);
+    formAplicar.appendChild(selectAplicarLabel);
+
+    const preguntasAplicar = document.createElement('div');
+    formAplicar.appendChild(preguntasAplicar);
+    let getResponstas = renderPreguntasEscala(selectAplicar.value, preguntasAplicar, 'aplicar');
+
+    const aplicarError = document.createElement('div');
+    aplicarError.className = 'view-historia-clinica__escalas-aplicar-error';
+    aplicarError.hidden = true;
+    formAplicar.appendChild(aplicarError);
+
+    const submitAplicar = document.createElement('button');
+    submitAplicar.type = 'submit';
+    submitAplicar.className = 'button button--primary';
+    submitAplicar.textContent = 'Guardar resultado';
+    formAplicar.appendChild(submitAplicar);
+
+    btnAplicar.addEventListener('click', () => {
+      formAplicar.hidden = !formAplicar.hidden;
+      formEnviar.hidden = true;
+      aplicarError.hidden = true;
+    });
+
+    formAplicar.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      aplicarError.hidden = true;
+      const respuestas = getResponstas();
+      if (!respuestas) {
+        aplicarError.textContent = 'Debe responder todas las preguntas';
+        aplicarError.hidden = false;
+        return;
+      }
+      const result = await apiPost({
+        accion: 'aplicarEscala',
+        token: ctx.session.token,
+        pacienteCodigo: paciente.codigo,
+        escalaTipo: selectAplicar.value,
+        respuestas,
+      });
+      if (result.error) {
+        if (handleAuthError(result)) return;
+        aplicarError.textContent = result.error;
+        aplicarError.hidden = false;
+        return;
+      }
+      escalas.unshift(result.aplicacion);
+      renderTablaEscalas();
+      formAplicar.hidden = true;
+      preguntasAplicar.querySelectorAll('input[type="radio"]').forEach((r) => { r.checked = false; });
+    });
+
+    // --- Formulario Enviar ---
+    const btnEnviar = document.createElement('button');
+    btnEnviar.type = 'button';
+    btnEnviar.className = 'button button--primary view-historia-clinica__escalas-btn-enviar';
+    btnEnviar.textContent = 'Enviar al paciente';
+
+    const formEnviar = document.createElement('form');
+    formEnviar.className = 'view-historia-clinica__escalas-form-enviar';
+    formEnviar.hidden = true;
+
+    const selectEnviarLabel = document.createElement('label');
+    selectEnviarLabel.textContent = 'Escala';
+    const selectEnviar = document.createElement('select');
+    selectEnviar.className = 'view-historia-clinica__escalas-select-enviar';
+    Object.entries(ESCALAS_CATALOGO).forEach(([tipo, escala]) => {
+      const opt = document.createElement('option');
+      opt.value = tipo;
+      opt.textContent = escala.nombre;
+      selectEnviar.appendChild(opt);
+    });
+    selectEnviarLabel.appendChild(selectEnviar);
+    formEnviar.appendChild(selectEnviarLabel);
+
+    const enviarError = document.createElement('div');
+    enviarError.className = 'view-historia-clinica__escalas-enviar-error';
+    enviarError.hidden = true;
+    formEnviar.appendChild(enviarError);
+
+    const enviarSuccess = document.createElement('div');
+    enviarSuccess.className = 'view-historia-clinica__escalas-enviar-success';
+    enviarSuccess.hidden = true;
+    formEnviar.appendChild(enviarSuccess);
+
+    const submitEnviar = document.createElement('button');
+    submitEnviar.type = 'submit';
+    submitEnviar.className = 'button button--primary';
+    submitEnviar.textContent = 'Enviar';
+    formEnviar.appendChild(submitEnviar);
+
+    btnEnviar.addEventListener('click', () => {
+      formEnviar.hidden = !formEnviar.hidden;
+      formAplicar.hidden = true;
+      enviarError.hidden = true;
+      enviarSuccess.hidden = true;
+    });
+
+    formEnviar.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      enviarError.hidden = true;
+      enviarSuccess.hidden = true;
+      const result = await apiPost({
+        accion: 'asignarEscala',
+        token: ctx.session.token,
+        pacienteCodigo: paciente.codigo,
+        escalaTipo: selectEnviar.value,
+      });
+      if (result.error) {
+        if (handleAuthError(result)) return;
+        enviarError.textContent = result.error;
+        enviarError.hidden = false;
+        return;
+      }
+      escalas.unshift({
+        id: result.aplicacionId,
+        pacienteCodigo: paciente.codigo,
+        escalaTipo: selectEnviar.value,
+        modo: 'autoaplicada',
+        estado: 'pendiente',
+        puntajeTotal: null,
+        partAPositivo: null,
+        creadoPor: ctx.session.codigo,
+        fechaCreacion: new Date().toISOString(),
+        completadoPor: '',
+        fechaCompletada: '',
+      });
+      renderTablaEscalas();
+      enviarSuccess.textContent = 'Email enviado al paciente.';
+      enviarSuccess.hidden = false;
+      formEnviar.hidden = true;
+    });
+
+    acciones.appendChild(btnAplicar);
+    acciones.appendChild(formAplicar);
+    acciones.appendChild(btnEnviar);
+    acciones.appendChild(formEnviar);
+    section.appendChild(acciones);
     fichaContainer.appendChild(section);
   }
 
