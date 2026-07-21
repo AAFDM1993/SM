@@ -17,8 +17,8 @@ function doPost(e) {
   return handlePost(e, gasServices);
 }
 
-// Ejecutar manualmente desde el editor de Apps Script para inicializar el Spreadsheet.
-function setupSheets() {
+// Ejecutar manualmente desde el editor de Apps Script para inicializar el sistema.
+function setup() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
   const SHEETS = [
@@ -48,6 +48,23 @@ function setupSheets() {
       Logger.log('Ya existe: ' + name);
     }
   });
+
+  const props = PropertiesService.getScriptProperties();
+  const aesKey = props.getProperty('AES_KEY');
+  if (aesKey) {
+    Logger.log('AES_KEY: ya configurada');
+  } else {
+    const newKey = Utilities.getUuid().replace(/-/g, '');
+    props.setProperty('AES_KEY', newKey);
+    Logger.log('AES_KEY generada: ' + newKey + ' — copia esta clave y guárdala en un lugar seguro');
+  }
+
+  try {
+    const cal = obtenerCalendarioConsultas(gasServices);
+    Logger.log('Calendario "Consultas SMPDJM": ' + cal.getId());
+  } catch (e) {
+    Logger.log('ADVERTENCIA calendario: ' + e.message);
+  }
 
   Logger.log('Setup completo.');
 }
