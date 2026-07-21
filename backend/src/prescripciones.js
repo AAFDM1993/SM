@@ -35,6 +35,8 @@ export function crearPrescripcion(b, user, services) {
   return { ok: true, prescripcion: { id, pacienteCodigo: usuario.codigo, medicamento, dosis, frecuencia, fechaInicio, fechaFin, creadoPor: user.codigo, fechaCreacion } };
 }
 
+const SHEET_TOMAS = '_prescripciones_tomas';
+
 export function listarPrescripciones(codigo, services) {
   const usuario = validarPaciente(codigo, services);
   if (!usuario) return { error: 'Paciente no encontrado' };
@@ -63,4 +65,66 @@ export function listarPrescripciones(codigo, services) {
     })
     .map(({ _index, ...rest }) => rest);
   return { ok: true, prescripciones };
+}
+
+export function listarMisPrescripciones(user, services) {
+  const sheet = services.SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_PRESCRIPCIONES);
+  if (!sheet) return { error: 'Hoja de prescripciones no encontrada' };
+  const tomasSheet = services.SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_TOMAS);
+  if (!tomasSheet) return { error: 'Hoja de tomas no encontrada' };
+
+  const last = sheet.getLastRow();
+  const rows = last < 2 ? [] : sheet.getRange(2, 1, last - 1, 9).getValues();
+
+  const lastTomas = tomasSheet.getLastRow();
+  const tomasRows = lastTomas < 2 ? [] : tomasSheet.getRange(2, 1, lastTomas - 1, 5).getValues();
+
+  function safeDecrypt(val) {
+    try { return decrypt_(val, services); } catch { return '[cifrado inválido]'; }
+  }
+
+  const prescripciones = rows
+    .filter((row) => String(row[1]).trim().toLowerCase() === user.codigo.toLowerCase())
+    .map((row) => {
+      const id = String(row[0]);
+      const tomas = tomasRows
+        .filter((t) => String(t[1]) === id)
+        .map((t) => ({ id: String(t[0]), fechaHora: String(t[2]), nota: String(t[3]) }))
+        .sort((a, b) => b.fechaHora.localeCompare(a.fechaHora));
+      return {
+        id,
+        medicamento: safeDecrypt(row[2]),
+        dosis: safeDecrypt(row[3]),
+        frecuencia: safeDecrypt(row[4]),
+        fechaInicio: String(row[5]),
+        fechaFin: String(row[6]),
+        tomas,
+      };
+    });
+
+  return { ok: true, prescripciones };
+}
+
+export function registrarToma(b, user, services) {
+  const prescripcionId = String(b.prescripcionId || '').trim();
+  if (!prescripcionId) return { error: 'prescripcionId es requerido' };
+
+  const sheet = services.SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_PRESCRIPCIONES);
+  if (!sheet) return { error: 'Hoja de prescripciones no encontrada' };
+
+  const last = sheet.getLastRow();
+  const rows = last < 2 ? [] : sheet.getRange(2, 1, last - 1, 9).getValues();
+  const prescripcionRow = rows.find((row) => String(row[0]) === prescripcionId);
+  if (!prescripcionRow) return { error: 'Prescripción no encontrada' };
+  if (String(prescripcionRow[1]).trim() !== user.codigo) return { error: 'Permiso denegado' };
+
+  const tomasSheet = services.SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_TOMAS);
+  if (!tomasSheet) return { error: 'Hoja de tomas no encontrada' };
+
+  const id = services.Utilities.getUuid();
+  const fechaHora = new Date().toISOString();
+  const nota = String(b.nota || '');
+  tomasSheet.appendRow([id, prescripcionId, fechaHora, nota, user.codigo]);
+  registrarLog(services, user.codigo, user.rol, 'toma_registrada', prescripcionId);
+  return { ok: true, toma: { id, prescripcionId, fechaHora, nota, completadoPor: user.codigo } };
 }
