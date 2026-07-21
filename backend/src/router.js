@@ -6,7 +6,7 @@ import { leerAgenda, crearCita, cambiarEstadoCita, leerMiAgenda, cancelarMiCita 
 import { leerHorarioConfig, leerBloqueos, actualizarHorarioConfig, crearBloqueo, eliminarBloqueo } from './horario.js';
 import { crearPaciente, actualizarPaciente, leerFichaPaciente, listarFichasPacientes } from './pacientes.js';
 import { leerAntecedentes, actualizarAntecedentes, crearNotaEvolucion, listarNotasEvolucion } from './historia-clinica.js';
-import { crearPrescripcion, listarPrescripciones } from './prescripciones.js';
+import { crearPrescripcion, listarPrescripciones, listarMisPrescripciones, registrarToma } from './prescripciones.js';
 import { aplicarEscala, asignarEscala, completarEscala, listarEscalasPaciente, listarMisEscalas } from './escalas.js';
 import { asignarTarea, listarTareasPaciente, listarMisActividades, completarOcurrencia } from './tareas.js';
 
@@ -97,6 +97,12 @@ export function handleGet(e, services) {
     case 'listarMisActividades':
       return json_(
         requireAuth(p, ['usuario'], (user) => listarMisActividades(user, services), services),
+        services
+      );
+
+    case 'listarMisPrescripciones':
+      return json_(
+        requireAuth(p, ['usuario'], (user) => listarMisPrescripciones(user, services), services),
         services
       );
 
@@ -228,6 +234,12 @@ export function handlePost(e, services) {
     case 'completarOcurrencia':
       return json_(
         requireAuthBody(b.token, ['usuario'], (user) => completarOcurrencia(b, user, services), services),
+        services
+      );
+
+    case 'registrarToma':
+      return json_(
+        requireAuthBody(b.token, ['usuario'], (user) => registrarToma(b, user, services), services),
         services
       );
 

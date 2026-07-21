@@ -33,6 +33,7 @@ function setupSheets() {
     { name: '_escalas_aplicaciones', header: ['id', 'pacienteCodigo', 'escalaTipo', 'modo', 'estado', 'respuestas', 'puntajeTotal', 'partAPositivo', 'creadoPor', 'fechaCreacion', 'completadoPor', 'fechaCompletada'] },
     { name: '_tareas', header: ['id', 'pacienteCodigo', 'titulo', 'descripcion', 'tipo', 'frecuencia', 'fechaInicio', 'fechaFin', 'creadoPor', 'fechaCreacion'] },
     { name: '_tareas_registros', header: ['id', 'tareaId', 'fechaOcurrencia', 'nota', 'completadoPor', 'fechaCompletacion'] },
+    { name: '_prescripciones_tomas', header: ['id', 'prescripcionId', 'fechaHora', 'nota', 'completadoPor'] },
     { name: '_log',             header: ['timestamp', 'codigo', 'rol', 'accion', 'detalle'] },
   ];
 

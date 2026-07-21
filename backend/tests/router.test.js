@@ -16,6 +16,7 @@ const NOTAS_HEADER = ['id', 'pacienteCodigo', 'fecha', 'motivoConsulta', 'notas'
 const PRESCRIPCIONES_HEADER = ['id', 'pacienteCodigo', 'medicamento', 'dosis', 'frecuencia', 'fechaInicio', 'fechaFin', 'creadoPor', 'fechaCreacion'];
 const TAREAS_HEADER_R = ['id','pacienteCodigo','titulo','descripcion','tipo','frecuencia','fechaInicio','fechaFin','creadoPor','fechaCreacion'];
 const REGISTROS_HEADER_R = ['id','tareaId','fechaOcurrencia','nota','completadoPor','fechaCompletacion'];
+const TOMAS_HEADER_R = ['id', 'prescripcionId', 'fechaHora', 'nota', 'completadoPor'];
 const AES_KEY = '000102030405060708090a0b0c0d0e0f';
 
 const HORARIO_LABORAL = [
@@ -332,6 +333,27 @@ describe('handleGet', () => {
     const services = buildServicesWithUser({ codigo: 'PSI001', password: 'clave123', rol: 'psiquiatra', nombre: 'Dra. Petra' });
     const token = loginToken(services, 'PSI001', 'clave123');
     const result = handleGet({ parameter: { accion: 'listarMisActividades', token } }, services);
+    expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
+  });
+
+  it('listarMisPrescripciones permite usuario', () => {
+    const services = buildServicesWithUser({
+      codigo: 'USR001', password: 'clave123', rol: 'usuario', nombre: 'Paciente',
+      extraSheets: {
+        _prescripciones: [PRESCRIPCIONES_HEADER],
+        _prescripciones_tomas: [TOMAS_HEADER_R],
+      },
+    });
+    const token = loginToken(services, 'USR001', 'clave123');
+    const result = handleGet({ parameter: { accion: 'listarMisPrescripciones', token } }, services);
+    expect(bodyOf(result).ok).toBe(true);
+    expect(bodyOf(result).prescripciones).toEqual([]);
+  });
+
+  it('listarMisPrescripciones rechaza psiquiatra', () => {
+    const services = buildServicesWithUser({ codigo: 'PSI001', password: 'clave123', rol: 'psiquiatra', nombre: 'Dra. Petra' });
+    const token = loginToken(services, 'PSI001', 'clave123');
+    const result = handleGet({ parameter: { accion: 'listarMisPrescripciones', token } }, services);
     expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
   });
 });
@@ -764,6 +786,31 @@ describe('handlePost', () => {
     const token = loginToken(services, 'PSI001', 'clave123');
     const result = handlePost({
       postData: { contents: JSON.stringify({ accion: 'completarOcurrencia', token, tareaId: 't1', fechaOcurrencia: '2026-07-15' }) },
+    }, services);
+    expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
+  });
+
+  it('registrarToma permite usuario', () => {
+    const PRESC_ROW = ['p1', 'USR001', 'enc-med', 'enc-dos', 'enc-frec', '2026-07-01', '', 'PSI001', '2026-07-01T00:00:00.000Z'];
+    const services = buildServicesWithUser({
+      codigo: 'USR001', password: 'clave123', rol: 'usuario', nombre: 'Paciente',
+      extraSheets: {
+        _prescripciones: [PRESCRIPCIONES_HEADER, PRESC_ROW],
+        _prescripciones_tomas: [TOMAS_HEADER_R],
+      },
+    });
+    const token = loginToken(services, 'USR001', 'clave123');
+    const result = handlePost({
+      postData: { contents: JSON.stringify({ accion: 'registrarToma', token, prescripcionId: 'p1' }) },
+    }, services);
+    expect(bodyOf(result).ok).toBe(true);
+  });
+
+  it('registrarToma rechaza psiquiatra', () => {
+    const services = buildServicesWithUser({ codigo: 'PSI001', password: 'clave123', rol: 'psiquiatra', nombre: 'Dra. Petra' });
+    const token = loginToken(services, 'PSI001', 'clave123');
+    const result = handlePost({
+      postData: { contents: JSON.stringify({ accion: 'registrarToma', token, prescripcionId: 'p1' }) },
     }, services);
     expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
   });
