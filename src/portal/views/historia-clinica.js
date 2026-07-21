@@ -163,6 +163,16 @@ export function initHistoriaClinicaView(container, ctx) {
       return;
     }
     renderTareas(paciente, tareasResult.tareas);
+
+    const sintomasResult = await apiGet('listarSintomasPaciente', {
+      token: ctx.session.token, codigo: paciente.codigo,
+    });
+    if (sintomasResult.error) {
+      if (handleAuthError(sintomasResult)) return;
+      showError(sintomasResult.error);
+      return;
+    }
+    renderSintomas(sintomasResult.sintomas);
   }
 
   function renderAntecedentes(paciente, antecedentes) {
@@ -903,6 +913,33 @@ export function initHistoriaClinicaView(container, ctx) {
 
     section.appendChild(btnAsignar);
     section.appendChild(formAsignar);
+    fichaContainer.appendChild(section);
+  }
+
+  function renderSintomas(sintomas) {
+    const section = document.createElement('section');
+    section.className = 'view-historia-clinica__sintomas';
+    const titulo = document.createElement('h4');
+    titulo.textContent = 'Síntomas auto-registrados';
+    section.appendChild(titulo);
+    if (sintomas.length === 0) {
+      const vacio = document.createElement('p');
+      vacio.textContent = 'Sin registros de síntomas.';
+      section.appendChild(vacio);
+    } else {
+      const tabla = document.createElement('table');
+      const thead = document.createElement('thead');
+      thead.innerHTML = '<tr><th>Fecha/Hora</th><th>Tipo</th><th>Intensidad</th><th>Nota</th></tr>';
+      tabla.appendChild(thead);
+      const tbody = document.createElement('tbody');
+      sintomas.forEach((s) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${s.fechaHora.slice(0, 16).replace('T', ' ')}</td><td>${s.tipo}</td><td>${s.intensidad}</td><td>${s.nota || '—'}</td>`;
+        tbody.appendChild(tr);
+      });
+      tabla.appendChild(tbody);
+      section.appendChild(tabla);
+    }
     fichaContainer.appendChild(section);
   }
 

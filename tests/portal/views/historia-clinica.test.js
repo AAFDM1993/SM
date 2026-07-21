@@ -50,6 +50,7 @@ describe('initHistoriaClinicaView', () => {
       if (accion === 'listarPrescripciones') return Promise.resolve({ ok: true, prescripciones: [] });
       if (accion === 'listarEscalasPaciente') return Promise.resolve({ ok: true, escalas: [] });
       if (accion === 'listarTareasPaciente') return Promise.resolve({ ok: true, tareas: [] });
+      if (accion === 'listarSintomasPaciente') return Promise.resolve({ ok: true, sintomas: [] });
       return Promise.resolve({ error: 'Accion no reconocida' });
     });
     apiPost.mockReset();
@@ -441,6 +442,7 @@ describe('initHistoriaClinicaView', () => {
           registros: [{ fechaOcurrencia: '2024-01-10' }],
         }],
       });
+      if (accion === 'listarSintomasPaciente') return Promise.resolve({ ok: true, sintomas: [] });
       return Promise.resolve({ error: 'Accion no reconocida' });
     });
     initHistoriaClinicaView(container, { session: SESSION, forced: false });
@@ -514,5 +516,66 @@ describe('initHistoriaClinicaView', () => {
     const err = container.querySelector('.view-historia-clinica__tareas-error');
     expect(err.hidden).toBe(false);
     expect(err.textContent).toBe('Paciente no encontrado');
+  });
+
+  it('renderiza sección Síntomas al abrir ficha del paciente', async () => {
+    initHistoriaClinicaView(container, { session: SESSION, forced: false });
+    await flush();
+    container.querySelectorAll('tbody tr')[0].click();
+    await flush();
+    expect(apiGet).toHaveBeenCalledWith('listarSintomasPaciente', { token: 'psi-tok', codigo: '45678912' });
+    expect(container.querySelector('.view-historia-clinica__sintomas')).not.toBeNull();
+  });
+
+  it('muestra "Sin registros de síntomas." cuando no hay registros', async () => {
+    initHistoriaClinicaView(container, { session: SESSION, forced: false });
+    await flush();
+    container.querySelectorAll('tbody tr')[0].click();
+    await flush();
+    expect(container.querySelector('.view-historia-clinica__sintomas').textContent)
+      .toContain('Sin registros de síntomas.');
+  });
+
+  it('muestra tabla de síntomas cuando hay registros', async () => {
+    apiGet.mockImplementation((accion) => {
+      if (accion === 'listarFichasPacientes') return Promise.resolve({ ok: true, pacientes: PACIENTES });
+      if (accion === 'leerAntecedentes') return Promise.resolve({ ok: true, antecedentes: ANTECEDENTES_MARIA });
+      if (accion === 'listarNotasEvolucion') return Promise.resolve({ ok: true, notas: [] });
+      if (accion === 'listarPrescripciones') return Promise.resolve({ ok: true, prescripciones: [] });
+      if (accion === 'listarEscalasPaciente') return Promise.resolve({ ok: true, escalas: [] });
+      if (accion === 'listarTareasPaciente') return Promise.resolve({ ok: true, tareas: [] });
+      if (accion === 'listarSintomasPaciente') return Promise.resolve({
+        ok: true,
+        sintomas: [{ id: 's1', tipo: 'Ánimo', intensidad: 3, nota: 'test', fechaHora: '2026-07-21T10:00:00.000Z' }],
+      });
+      return Promise.resolve({ error: 'Accion no reconocida' });
+    });
+    initHistoriaClinicaView(container, { session: SESSION, forced: false });
+    await flush();
+    container.querySelectorAll('tbody tr')[0].click();
+    await flush();
+    const filas = container.querySelectorAll('.view-historia-clinica__sintomas tbody tr');
+    expect(filas.length).toBe(1);
+    expect(filas[0].textContent).toContain('Ánimo');
+    expect(filas[0].textContent).toContain('3');
+  });
+
+  it('error en listarSintomasPaciente muestra error y no renderiza sección síntomas', async () => {
+    apiGet.mockImplementation((accion) => {
+      if (accion === 'listarFichasPacientes') return Promise.resolve({ ok: true, pacientes: PACIENTES });
+      if (accion === 'leerAntecedentes') return Promise.resolve({ ok: true, antecedentes: ANTECEDENTES_MARIA });
+      if (accion === 'listarNotasEvolucion') return Promise.resolve({ ok: true, notas: [] });
+      if (accion === 'listarPrescripciones') return Promise.resolve({ ok: true, prescripciones: [] });
+      if (accion === 'listarEscalasPaciente') return Promise.resolve({ ok: true, escalas: [] });
+      if (accion === 'listarTareasPaciente') return Promise.resolve({ ok: true, tareas: [] });
+      if (accion === 'listarSintomasPaciente') return Promise.resolve({ error: 'Error de servidor' });
+      return Promise.resolve({ error: 'Accion no reconocida' });
+    });
+    initHistoriaClinicaView(container, { session: SESSION, forced: false });
+    await flush();
+    container.querySelectorAll('tbody tr')[0].click();
+    await flush();
+    expect(container.querySelector('.view-historia-clinica__error').hidden).toBe(false);
+    expect(container.querySelector('.view-historia-clinica__sintomas')).toBeNull();
   });
 });
