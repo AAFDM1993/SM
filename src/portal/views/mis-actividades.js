@@ -56,10 +56,64 @@ export function initMisActividadesView(container, ctx) {
   tomasHistorialSection.appendChild(tomasTabla);
   wrapper.appendChild(tomasHistorialSection);
 
+  const sintomasSection = document.createElement('section');
+  sintomasSection.className = 'view-mis-actividades__sintomas';
+  const sintomasTitulo = document.createElement('h3');
+  sintomasTitulo.textContent = 'Mis síntomas';
+  sintomasSection.appendChild(sintomasTitulo);
+
+  const sintomasTipo = document.createElement('select');
+  sintomasTipo.className = 'view-mis-actividades__sintoma-tipo';
+  ['Ánimo', 'Ansiedad', 'Sueño', 'Energía', 'Irritabilidad'].forEach((t) => {
+    const opt = document.createElement('option');
+    opt.value = t;
+    opt.textContent = t;
+    sintomasTipo.appendChild(opt);
+  });
+  sintomasSection.appendChild(sintomasTipo);
+
+  const sintomasIntensidad = document.createElement('select');
+  sintomasIntensidad.className = 'view-mis-actividades__sintoma-intensidad';
+  [1, 2, 3, 4, 5].forEach((n) => {
+    const opt = document.createElement('option');
+    opt.value = String(n);
+    opt.textContent = String(n);
+    sintomasIntensidad.appendChild(opt);
+  });
+  sintomasSection.appendChild(sintomasIntensidad);
+
+  const sintomasNota = document.createElement('textarea');
+  sintomasNota.className = 'view-mis-actividades__sintoma-nota';
+  sintomasNota.placeholder = 'Nota opcional...';
+  sintomasSection.appendChild(sintomasNota);
+
+  const sintomasFormError = document.createElement('div');
+  sintomasFormError.className = 'view-mis-actividades__sintoma-form-error';
+  sintomasFormError.hidden = true;
+  sintomasSection.appendChild(sintomasFormError);
+
+  const sintomasBtn = document.createElement('button');
+  sintomasBtn.type = 'button';
+  sintomasBtn.className = 'button button--primary view-mis-actividades__btn-registrar-sintoma';
+  sintomasBtn.textContent = 'Registrar síntoma';
+  sintomasSection.appendChild(sintomasBtn);
+  wrapper.appendChild(sintomasSection);
+
+  const sintomasHistorialSection = document.createElement('section');
+  sintomasHistorialSection.className = 'view-mis-actividades__sintomas-historial';
+  const sintomasHistorialTitulo = document.createElement('h3');
+  sintomasHistorialTitulo.textContent = 'Historial de síntomas';
+  sintomasHistorialSection.appendChild(sintomasHistorialTitulo);
+  const sintomasTabla = document.createElement('table');
+  sintomasTabla.className = 'view-mis-actividades__sintomas-tabla';
+  sintomasHistorialSection.appendChild(sintomasTabla);
+  wrapper.appendChild(sintomasHistorialSection);
+
   container.appendChild(wrapper);
 
   let tareas = [];
   let prescripciones = [];
+  let sintomas = [];
 
   function calcularOcurrencias(tarea) {
     const hoy = new Date().toISOString().slice(0, 10);
@@ -285,10 +339,47 @@ export function initMisActividadesView(container, ctx) {
     tomasTabla.appendChild(tbody);
   }
 
+  function renderSintomasHistorial() {
+    sintomasTabla.innerHTML = '';
+    const thead = document.createElement('thead');
+    thead.innerHTML = '<tr><th>Fecha/Hora</th><th>Tipo</th><th>Intensidad</th><th>Nota</th></tr>';
+    sintomasTabla.appendChild(thead);
+    const tbody = document.createElement('tbody');
+    sintomas.forEach((s) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${s.fechaHora.slice(0, 16).replace('T', ' ')}</td><td>${s.tipo}</td><td>${s.intensidad}</td><td>${s.nota || '—'}</td>`;
+      tbody.appendChild(tr);
+    });
+    sintomasTabla.appendChild(tbody);
+  }
+
+  sintomasBtn.addEventListener('click', async () => {
+    sintomasFormError.hidden = true;
+    const result = await apiPost({
+      accion: 'registrarSintoma',
+      token: ctx.session.token,
+      tipo: sintomasTipo.value,
+      intensidad: Number(sintomasIntensidad.value),
+      nota: sintomasNota.value.trim(),
+    });
+    if (result.error) {
+      if (handleAuthError(result)) return;
+      sintomasFormError.textContent = result.error;
+      sintomasFormError.hidden = false;
+      return;
+    }
+    sintomas.unshift(result.sintoma);
+    renderSintomasHistorial();
+    sintomasTipo.selectedIndex = 0;
+    sintomasIntensidad.selectedIndex = 0;
+    sintomasNota.value = '';
+  });
+
   async function loadActividades() {
-    const [actividadesResult, prescripcionesResult] = await Promise.all([
+    const [actividadesResult, prescripcionesResult, sintomasResult] = await Promise.all([
       apiGet('listarMisActividades', { token: ctx.session.token }),
       apiGet('listarMisPrescripciones', { token: ctx.session.token }),
+      apiGet('listarMisSintomas', { token: ctx.session.token }),
     ]);
     if (actividadesResult.error) {
       if (handleAuthError(actividadesResult)) return;
@@ -302,12 +393,20 @@ export function initMisActividadesView(container, ctx) {
       errorEl.hidden = false;
       return;
     }
+    if (sintomasResult.error) {
+      if (handleAuthError(sintomasResult)) return;
+      errorEl.textContent = sintomasResult.error;
+      errorEl.hidden = false;
+      return;
+    }
     tareas = actividadesResult.tareas;
     prescripciones = prescripcionesResult.prescripciones;
+    sintomas = sintomasResult.sintomas;
     renderPendientes();
     renderCompletadas();
     renderPrescripcionesActivas();
     renderTomasHistorial();
+    renderSintomasHistorial();
   }
 
   loadActividades();

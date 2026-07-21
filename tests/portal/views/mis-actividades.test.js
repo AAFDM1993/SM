@@ -54,6 +54,7 @@ describe('initMisActividadesView', () => {
     apiGet.mockImplementation((accion) => {
       if (accion === 'listarMisActividades') return Promise.resolve({ ok: true, tareas: [] });
       if (accion === 'listarMisPrescripciones') return Promise.resolve({ ok: true, prescripciones: [] });
+      if (accion === 'listarMisSintomas') return Promise.resolve({ ok: true, sintomas: [] });
       return Promise.resolve({ ok: true });
     });
     apiPost.mockReset();
@@ -81,6 +82,7 @@ describe('initMisActividadesView', () => {
     apiGet.mockImplementation((accion) => {
       if (accion === 'listarMisActividades') return Promise.resolve({ ok: true, tareas: [getTareaUnica()] });
       if (accion === 'listarMisPrescripciones') return Promise.resolve({ ok: true, prescripciones: [] });
+      if (accion === 'listarMisSintomas') return Promise.resolve({ ok: true, sintomas: [] });
       return Promise.resolve({ ok: true });
     });
     initMisActividadesView(container, { session: SESSION, forced: false });
@@ -95,6 +97,7 @@ describe('initMisActividadesView', () => {
     apiGet.mockImplementation((accion) => {
       if (accion === 'listarMisActividades') return Promise.resolve({ ok: true, tareas: [getTareaUnica()] });
       if (accion === 'listarMisPrescripciones') return Promise.resolve({ ok: true, prescripciones: [] });
+      if (accion === 'listarMisSintomas') return Promise.resolve({ ok: true, sintomas: [] });
       return Promise.resolve({ ok: true });
     });
     initMisActividadesView(container, { session: SESSION, forced: false });
@@ -110,6 +113,7 @@ describe('initMisActividadesView', () => {
     apiGet.mockImplementation((accion) => {
       if (accion === 'listarMisActividades') return Promise.resolve({ ok: true, tareas: [getTareaUnica()] });
       if (accion === 'listarMisPrescripciones') return Promise.resolve({ ok: true, prescripciones: [] });
+      if (accion === 'listarMisSintomas') return Promise.resolve({ ok: true, sintomas: [] });
       return Promise.resolve({ ok: true });
     });
     apiPost.mockResolvedValue({
@@ -133,6 +137,7 @@ describe('initMisActividadesView', () => {
     apiGet.mockImplementation((accion) => {
       if (accion === 'listarMisActividades') return Promise.resolve({ ok: true, tareas: [getTareaUnica()] });
       if (accion === 'listarMisPrescripciones') return Promise.resolve({ ok: true, prescripciones: [] });
+      if (accion === 'listarMisSintomas') return Promise.resolve({ ok: true, sintomas: [] });
       return Promise.resolve({ ok: true });
     });
     apiPost.mockResolvedValue({
@@ -156,6 +161,7 @@ describe('initMisActividadesView', () => {
     apiGet.mockImplementation((accion) => {
       if (accion === 'listarMisActividades') return Promise.resolve({ ok: true, tareas: [getTareaCompletada()] });
       if (accion === 'listarMisPrescripciones') return Promise.resolve({ ok: true, prescripciones: [] });
+      if (accion === 'listarMisSintomas') return Promise.resolve({ ok: true, sintomas: [] });
       return Promise.resolve({ ok: true });
     });
     initMisActividadesView(container, { session: SESSION, forced: false });
@@ -177,6 +183,7 @@ describe('initMisActividadesView', () => {
     apiGet.mockImplementation((accion) => {
       if (accion === 'listarMisActividades') return Promise.resolve({ ok: true, tareas: [] });
       if (accion === 'listarMisPrescripciones') return Promise.resolve({ ok: true, prescripciones: [getPrescripcionActiva()] });
+      if (accion === 'listarMisSintomas') return Promise.resolve({ ok: true, sintomas: [] });
       return Promise.resolve({ ok: true });
     });
     initMisActividadesView(container, { session: SESSION, forced: false });
@@ -190,6 +197,7 @@ describe('initMisActividadesView', () => {
     apiGet.mockImplementation((accion) => {
       if (accion === 'listarMisActividades') return Promise.resolve({ ok: true, tareas: [] });
       if (accion === 'listarMisPrescripciones') return Promise.resolve({ ok: true, prescripciones: [vencida] });
+      if (accion === 'listarMisSintomas') return Promise.resolve({ ok: true, sintomas: [] });
       return Promise.resolve({ ok: true });
     });
     initMisActividadesView(container, { session: SESSION, forced: false });
@@ -203,6 +211,7 @@ describe('initMisActividadesView', () => {
     apiGet.mockImplementation((accion) => {
       if (accion === 'listarMisActividades') return Promise.resolve({ ok: true, tareas: [] });
       if (accion === 'listarMisPrescripciones') return Promise.resolve({ ok: true, prescripciones: [getPrescripcionActiva()] });
+      if (accion === 'listarMisSintomas') return Promise.resolve({ ok: true, sintomas: [] });
       return Promise.resolve({ ok: true });
     });
     initMisActividadesView(container, { session: SESSION, forced: false });
@@ -218,6 +227,7 @@ describe('initMisActividadesView', () => {
     apiGet.mockImplementation((accion) => {
       if (accion === 'listarMisActividades') return Promise.resolve({ ok: true, tareas: [] });
       if (accion === 'listarMisPrescripciones') return Promise.resolve({ ok: true, prescripciones: [getPrescripcionActiva()] });
+      if (accion === 'listarMisSintomas') return Promise.resolve({ ok: true, sintomas: [] });
       return Promise.resolve({ ok: true });
     });
     apiPost.mockResolvedValue({
@@ -242,6 +252,7 @@ describe('initMisActividadesView', () => {
     apiGet.mockImplementation((accion) => {
       if (accion === 'listarMisActividades') return Promise.resolve({ ok: true, tareas: [] });
       if (accion === 'listarMisPrescripciones') return Promise.resolve({ ok: true, prescripciones: [getPrescripcionActiva()] });
+      if (accion === 'listarMisSintomas') return Promise.resolve({ ok: true, sintomas: [] });
       return Promise.resolve({ ok: true });
     });
     apiPost.mockResolvedValue({
@@ -257,5 +268,81 @@ describe('initMisActividadesView', () => {
     expect(filas.length).toBe(1);
     expect(filas[0].textContent).toContain('Sertralina');
     expect(container.querySelector('.view-mis-actividades__form-toma').hidden).toBe(true);
+  });
+
+  it('llama listarMisSintomas con el token de sesión', async () => {
+    initMisActividadesView(container, { session: SESSION, forced: false });
+    await flush();
+    expect(apiGet).toHaveBeenCalledWith('listarMisSintomas', { token: 'usr-tok' });
+  });
+
+  it('muestra historial de síntomas con Fecha/Hora, Tipo e Intensidad', async () => {
+    apiGet.mockImplementation((accion) => {
+      if (accion === 'listarMisActividades') return Promise.resolve({ ok: true, tareas: [] });
+      if (accion === 'listarMisPrescripciones') return Promise.resolve({ ok: true, prescripciones: [] });
+      if (accion === 'listarMisSintomas') return Promise.resolve({
+        ok: true,
+        sintomas: [{ id: 's1', tipo: 'Ánimo', intensidad: 3, nota: 'bien', fechaHora: '2026-07-21T10:00:00.000Z' }],
+      });
+      return Promise.resolve({ ok: true });
+    });
+    initMisActividadesView(container, { session: SESSION, forced: false });
+    await flush();
+    const filas = container.querySelectorAll('.view-mis-actividades__sintomas-tabla tbody tr');
+    expect(filas.length).toBe(1);
+    expect(filas[0].textContent).toContain('Ánimo');
+    expect(filas[0].textContent).toContain('3');
+    expect(filas[0].textContent).toContain('2026-07-21 10:00');
+  });
+
+  it('Registrar síntoma llama apiPost con accion, tipo, intensidad y nota', async () => {
+    apiPost.mockResolvedValue({
+      ok: true,
+      sintoma: { id: 's2', tipo: 'Ansiedad', intensidad: 4, nota: 'test', fechaHora: '2026-07-21T11:00:00.000Z' },
+    });
+    initMisActividadesView(container, { session: SESSION, forced: false });
+    await flush();
+    container.querySelector('.view-mis-actividades__sintoma-nota').value = 'test';
+    container.querySelector('.view-mis-actividades__btn-registrar-sintoma').click();
+    await flush();
+    expect(apiPost).toHaveBeenCalledWith(expect.objectContaining({
+      accion: 'registrarSintoma',
+      token: 'usr-tok',
+      nota: 'test',
+    }));
+  });
+
+  it('error de API se muestra en el div de error del formulario', async () => {
+    apiPost.mockResolvedValue({ error: 'Tipo de síntoma inválido' });
+    initMisActividadesView(container, { session: SESSION, forced: false });
+    await flush();
+    container.querySelector('.view-mis-actividades__btn-registrar-sintoma').click();
+    await flush();
+    const errorEl = container.querySelector('.view-mis-actividades__sintoma-form-error');
+    expect(errorEl.hidden).toBe(false);
+    expect(errorEl.textContent).toBe('Tipo de síntoma inválido');
+  });
+
+  it('éxito prepend síntoma al historial y limpia el formulario', async () => {
+    apiPost.mockResolvedValue({
+      ok: true,
+      sintoma: { id: 's3', tipo: 'Sueño', intensidad: 2, nota: '', fechaHora: '2026-07-21T12:00:00.000Z' },
+    });
+    initMisActividadesView(container, { session: SESSION, forced: false });
+    await flush();
+    container.querySelector('.view-mis-actividades__sintoma-nota').value = 'algo';
+    container.querySelector('.view-mis-actividades__btn-registrar-sintoma').click();
+    await flush();
+    const filas = container.querySelectorAll('.view-mis-actividades__sintomas-tabla tbody tr');
+    expect(filas.length).toBe(1);
+    expect(filas[0].textContent).toContain('Sueño');
+    expect(container.querySelector('.view-mis-actividades__sintoma-nota').value).toBe('');
+  });
+
+  it('muestra historial vacío si sintomas: []', async () => {
+    initMisActividadesView(container, { session: SESSION, forced: false });
+    await flush();
+    const tbody = container.querySelector('.view-mis-actividades__sintomas-tabla tbody');
+    expect(tbody.querySelectorAll('tr').length).toBe(0);
   });
 });
