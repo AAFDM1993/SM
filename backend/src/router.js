@@ -9,6 +9,7 @@ import { leerAntecedentes, actualizarAntecedentes, crearNotaEvolucion, listarNot
 import { crearPrescripcion, listarPrescripciones, listarMisPrescripciones, registrarToma } from './prescripciones.js';
 import { aplicarEscala, asignarEscala, completarEscala, listarEscalasPaciente, listarMisEscalas } from './escalas.js';
 import { asignarTarea, listarTareasPaciente, listarMisActividades, completarOcurrencia } from './tareas.js';
+import { registrarSintoma, listarMisSintomas, listarSintomasPaciente } from './sintomas.js';
 
 const ROLES_AGENDA = ['administrador', 'psiquiatra', 'recepcion'];
 const ROLES_HORARIO = ['administrador', 'psiquiatra'];
@@ -103,6 +104,18 @@ export function handleGet(e, services) {
     case 'listarMisPrescripciones':
       return json_(
         requireAuth(p, ['usuario'], (user) => listarMisPrescripciones(user, services), services),
+        services
+      );
+
+    case 'listarMisSintomas':
+      return json_(
+        requireAuth(p, ['usuario'], (user) => listarMisSintomas(user, services), services),
+        services
+      );
+
+    case 'listarSintomasPaciente':
+      return json_(
+        requireAuth(p, ['psiquiatra'], () => listarSintomasPaciente(p.codigo, services), services),
         services
       );
 
@@ -240,6 +253,12 @@ export function handlePost(e, services) {
     case 'registrarToma':
       return json_(
         requireAuthBody(b.token, ['usuario'], (user) => registrarToma(b, user, services), services),
+        services
+      );
+
+    case 'registrarSintoma':
+      return json_(
+        requireAuthBody(b.token, ['usuario'], (user) => registrarSintoma(b, user, services), services),
         services
       );
 

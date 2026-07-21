@@ -34,6 +34,7 @@ function setupSheets() {
     { name: '_tareas', header: ['id', 'pacienteCodigo', 'titulo', 'descripcion', 'tipo', 'frecuencia', 'fechaInicio', 'fechaFin', 'creadoPor', 'fechaCreacion'] },
     { name: '_tareas_registros', header: ['id', 'tareaId', 'fechaOcurrencia', 'nota', 'completadoPor', 'fechaCompletacion'] },
     { name: '_prescripciones_tomas', header: ['id', 'prescripcionId', 'fechaHora', 'nota', 'completadoPor'] },
+    { name: '_sintomas', header: ['id', 'pacienteCodigo', 'tipo', 'intensidad', 'nota', 'fechaHora', 'registradoPor'] },
     { name: '_log',             header: ['timestamp', 'codigo', 'rol', 'accion', 'detalle'] },
   ];
 

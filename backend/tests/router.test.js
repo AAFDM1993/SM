@@ -17,6 +17,7 @@ const PRESCRIPCIONES_HEADER = ['id', 'pacienteCodigo', 'medicamento', 'dosis', '
 const TAREAS_HEADER_R = ['id','pacienteCodigo','titulo','descripcion','tipo','frecuencia','fechaInicio','fechaFin','creadoPor','fechaCreacion'];
 const REGISTROS_HEADER_R = ['id','tareaId','fechaOcurrencia','nota','completadoPor','fechaCompletacion'];
 const TOMAS_HEADER_R = ['id', 'prescripcionId', 'fechaHora', 'nota', 'completadoPor'];
+const SINTOMAS_HEADER_R = ['id', 'pacienteCodigo', 'tipo', 'intensidad', 'nota', 'fechaHora', 'registradoPor'];
 const AES_KEY = '000102030405060708090a0b0c0d0e0f';
 
 const HORARIO_LABORAL = [
@@ -354,6 +355,42 @@ describe('handleGet', () => {
     const services = buildServicesWithUser({ codigo: 'PSI001', password: 'clave123', rol: 'psiquiatra', nombre: 'Dra. Petra' });
     const token = loginToken(services, 'PSI001', 'clave123');
     const result = handleGet({ parameter: { accion: 'listarMisPrescripciones', token } }, services);
+    expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
+  });
+
+  it('listarMisSintomas permite usuario', () => {
+    const services = buildServicesWithUser({
+      codigo: 'USR001', password: 'clave123', rol: 'usuario', nombre: 'Paciente',
+      extraSheets: { _sintomas: [SINTOMAS_HEADER_R] },
+    });
+    const token = loginToken(services, 'USR001', 'clave123');
+    const result = handleGet({ parameter: { accion: 'listarMisSintomas', token } }, services);
+    expect(bodyOf(result).ok).toBe(true);
+    expect(bodyOf(result).sintomas).toEqual([]);
+  });
+
+  it('listarMisSintomas rechaza psiquiatra', () => {
+    const services = buildServicesWithUser({ codigo: 'PSI001', password: 'clave123', rol: 'psiquiatra', nombre: 'Dra. Petra' });
+    const token = loginToken(services, 'PSI001', 'clave123');
+    const result = handleGet({ parameter: { accion: 'listarMisSintomas', token } }, services);
+    expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
+  });
+
+  it('listarSintomasPaciente permite psiquiatra', () => {
+    const services = buildServicesWithUser({
+      codigo: 'PSI001', password: 'clave123', rol: 'psiquiatra', nombre: 'Dra. Petra',
+      extraSheets: { _sintomas: [SINTOMAS_HEADER_R] },
+    });
+    const token = loginToken(services, 'PSI001', 'clave123');
+    const result = handleGet({ parameter: { accion: 'listarSintomasPaciente', token, codigo: 'PAC001' } }, services);
+    expect(bodyOf(result).ok).toBe(true);
+    expect(bodyOf(result).sintomas).toEqual([]);
+  });
+
+  it('listarSintomasPaciente rechaza usuario', () => {
+    const services = buildServicesWithUser({ codigo: 'USR001', password: 'clave123', rol: 'usuario', nombre: 'Paciente' });
+    const token = loginToken(services, 'USR001', 'clave123');
+    const result = handleGet({ parameter: { accion: 'listarSintomasPaciente', token, codigo: 'USR001' } }, services);
     expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
   });
 });
@@ -811,6 +848,27 @@ describe('handlePost', () => {
     const token = loginToken(services, 'PSI001', 'clave123');
     const result = handlePost({
       postData: { contents: JSON.stringify({ accion: 'registrarToma', token, prescripcionId: 'p1' }) },
+    }, services);
+    expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
+  });
+
+  it('registrarSintoma permite usuario', () => {
+    const services = buildServicesWithUser({
+      codigo: 'USR001', password: 'clave123', rol: 'usuario', nombre: 'Paciente',
+      extraSheets: { _sintomas: [SINTOMAS_HEADER_R] },
+    });
+    const token = loginToken(services, 'USR001', 'clave123');
+    const result = handlePost({
+      postData: { contents: JSON.stringify({ accion: 'registrarSintoma', token, tipo: 'Ánimo', intensidad: 3 }) },
+    }, services);
+    expect(bodyOf(result).ok).toBe(true);
+  });
+
+  it('registrarSintoma rechaza psiquiatra', () => {
+    const services = buildServicesWithUser({ codigo: 'PSI001', password: 'clave123', rol: 'psiquiatra', nombre: 'Dra. Petra' });
+    const token = loginToken(services, 'PSI001', 'clave123');
+    const result = handlePost({
+      postData: { contents: JSON.stringify({ accion: 'registrarSintoma', token, tipo: 'Ánimo', intensidad: 3 }) },
     }, services);
     expect(bodyOf(result)).toEqual({ error: 'Permiso denegado' });
   });
