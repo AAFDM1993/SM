@@ -36,9 +36,30 @@ export function initMisActividadesView(container, ctx) {
   completadasSection.appendChild(completadasTabla);
   wrapper.appendChild(completadasSection);
 
+  const prescripcionesSection = document.createElement('section');
+  prescripcionesSection.className = 'view-mis-actividades__prescripciones';
+  const prescripcionesTitulo = document.createElement('h3');
+  prescripcionesTitulo.textContent = 'Mis prescripciones';
+  prescripcionesSection.appendChild(prescripcionesTitulo);
+  const prescripcionesActivasList = document.createElement('div');
+  prescripcionesActivasList.className = 'view-mis-actividades__prescripciones-activas';
+  prescripcionesSection.appendChild(prescripcionesActivasList);
+  wrapper.appendChild(prescripcionesSection);
+
+  const tomasHistorialSection = document.createElement('section');
+  tomasHistorialSection.className = 'view-mis-actividades__tomas-historial';
+  const tomasHistorialTitulo = document.createElement('h3');
+  tomasHistorialTitulo.textContent = 'Historial de tomas';
+  tomasHistorialSection.appendChild(tomasHistorialTitulo);
+  const tomasTabla = document.createElement('table');
+  tomasTabla.className = 'view-mis-actividades__tomas-tabla';
+  tomasHistorialSection.appendChild(tomasTabla);
+  wrapper.appendChild(tomasHistorialSection);
+
   container.appendChild(wrapper);
 
   let tareas = [];
+  let prescripciones = [];
 
   function calcularOcurrencias(tarea) {
     const hoy = new Date().toISOString().slice(0, 10);
@@ -169,17 +190,124 @@ export function initMisActividadesView(container, ctx) {
     completadasTabla.appendChild(tbody);
   }
 
+  function esActiva(p) {
+    const hoy = new Date().toISOString().slice(0, 10);
+    return p.fechaInicio <= hoy && (p.fechaFin === '' || p.fechaFin >= hoy);
+  }
+
+  function renderPrescripcionesActivas() {
+    prescripcionesActivasList.innerHTML = '';
+    const activas = prescripciones.filter(esActiva);
+    if (activas.length === 0) {
+      prescripcionesActivasList.textContent = 'No hay prescripciones activas.';
+      return;
+    }
+    activas.forEach((p) => {
+      const item = document.createElement('div');
+      item.className = 'view-mis-actividades__prescripcion-item';
+
+      const nombre = document.createElement('div');
+      nombre.className = 'view-mis-actividades__prescripcion-nombre';
+      nombre.textContent = `${p.medicamento} — ${p.dosis} (${p.frecuencia})`;
+      item.appendChild(nombre);
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'button button--primary view-mis-actividades__btn-toma';
+      btn.textContent = 'Tomé ahora';
+      item.appendChild(btn);
+
+      const formContainer = document.createElement('div');
+      formContainer.className = 'view-mis-actividades__form-toma';
+      formContainer.hidden = true;
+
+      const notaInput = document.createElement('textarea');
+      notaInput.className = 'view-mis-actividades__toma-nota';
+      notaInput.placeholder = 'Nota opcional...';
+      formContainer.appendChild(notaInput);
+
+      const formError = document.createElement('div');
+      formError.className = 'view-mis-actividades__toma-error';
+      formError.hidden = true;
+      formContainer.appendChild(formError);
+
+      const confirmarBtn = document.createElement('button');
+      confirmarBtn.type = 'button';
+      confirmarBtn.className = 'button button--primary view-mis-actividades__btn-confirmar-toma';
+      confirmarBtn.textContent = 'Confirmar toma';
+      formContainer.appendChild(confirmarBtn);
+
+      btn.addEventListener('click', () => { formContainer.hidden = !formContainer.hidden; });
+
+      confirmarBtn.addEventListener('click', async () => {
+        formError.hidden = true;
+        const result = await apiPost({
+          accion: 'registrarToma',
+          token: ctx.session.token,
+          prescripcionId: p.id,
+          nota: notaInput.value.trim(),
+        });
+        if (result.error) {
+          if (handleAuthError(result)) return;
+          formError.textContent = result.error;
+          formError.hidden = false;
+          return;
+        }
+        const idx = prescripciones.findIndex((pr) => pr.id === p.id);
+        if (idx !== -1) prescripciones[idx].tomas.unshift(result.toma);
+        renderTomasHistorial();
+        formContainer.hidden = true;
+        notaInput.value = '';
+      });
+
+      item.appendChild(formContainer);
+      prescripcionesActivasList.appendChild(item);
+    });
+  }
+
+  function renderTomasHistorial() {
+    tomasTabla.innerHTML = '';
+    const todasTomas = [];
+    prescripciones.forEach((p) => {
+      p.tomas.forEach((t) => todasTomas.push({ medicamento: p.medicamento, ...t }));
+    });
+    todasTomas.sort((a, b) => b.fechaHora.localeCompare(a.fechaHora));
+
+    const thead = document.createElement('thead');
+    thead.innerHTML = '<tr><th>Medicamento</th><th>Fecha/Hora</th><th>Nota</th></tr>';
+    tomasTabla.appendChild(thead);
+    const tbody = document.createElement('tbody');
+    todasTomas.forEach((t) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${t.medicamento}</td><td>${t.fechaHora.slice(0, 16).replace('T', ' ')}</td><td>${t.nota || '—'}</td>`;
+      tbody.appendChild(tr);
+    });
+    tomasTabla.appendChild(tbody);
+  }
+
   async function loadActividades() {
-    const result = await apiGet('listarMisActividades', { token: ctx.session.token });
-    if (result.error) {
-      if (handleAuthError(result)) return;
-      errorEl.textContent = result.error;
+    const [actividadesResult, prescripcionesResult] = await Promise.all([
+      apiGet('listarMisActividades', { token: ctx.session.token }),
+      apiGet('listarMisPrescripciones', { token: ctx.session.token }),
+    ]);
+    if (actividadesResult.error) {
+      if (handleAuthError(actividadesResult)) return;
+      errorEl.textContent = actividadesResult.error;
       errorEl.hidden = false;
       return;
     }
-    tareas = result.tareas;
+    if (prescripcionesResult.error) {
+      if (handleAuthError(prescripcionesResult)) return;
+      errorEl.textContent = prescripcionesResult.error;
+      errorEl.hidden = false;
+      return;
+    }
+    tareas = actividadesResult.tareas;
+    prescripciones = prescripcionesResult.prescripciones;
     renderPendientes();
     renderCompletadas();
+    renderPrescripcionesActivas();
+    renderTomasHistorial();
   }
 
   loadActividades();
