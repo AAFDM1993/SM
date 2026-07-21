@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Panel - Petra Diana Jara M.</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script type="module" crossorigin src="/assets/dashboard-DER_R_uq.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/modulepreload-polyfill-B5Qt9EMX.js">
+    <link rel="modulepreload" crossorigin href="/assets/api-e6FkpwM7.js">
+    <link rel="stylesheet" crossorigin href="/assets/dashboard-BcPZ8bbd.css">
+  </head>
+  <body>
+    <header class="dashboard-header">
+      <div class="dashboard-header__inner">
+        <img
+          src="/assets/logo-diana.jpg"
+          alt="Logo Petra Diana Jara M. - Médico Psiquiatra"
+          class="dashboard-header__logo"
+        />
+        <div class="dashboard-header__user">
+          <span id="user-nombre" class="dashboard-header__nombre"></span>
+          <span id="user-rol" class="dashboard-header__rol"></span>
+        </div>
+        <button
+          id="nav-toggle"
+          class="nav-toggle"
+          aria-expanded="false"
+          aria-controls="nav-menu"
+          aria-label="Abrir menú"
+        >
+          <span class="nav-toggle__bar"></span>
+          <span class="nav-toggle__bar"></span>
+          <span class="nav-toggle__bar"></span>
+        </button>
+        <button id="logout-button" class="dashboard-header__logout">Cerrar sesión</button>
+      </div>
+    </header>
+
+    <div class="dashboard">
+      <nav id="nav-menu" class="dashboard-nav"></nav>
+      <main id="dashboard-main" class="dashboard-main"></main>
+    </div>
+
+  </body>
+</html>
